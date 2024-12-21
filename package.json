@@ -1,15 +1,16 @@
 {
   "name": "chatappbackend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Backend for a chat application using WebSockets.",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node build/index.js",
+    "start": "node dist/index.js",
     "build": "tsc",
+    "dev": "ts-node-dev src/index.ts",
     "postinstall": "npm run build"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["chat", "backend", "websocket"],
+  "author": "Your Name",
   "license": "ISC",
   "dependencies": {
     "ws": "^8.18.0"
@@ -19,6 +20,7 @@
     "@types/node": "^22.10.2",
     "@types/ws": "^8.5.13",
     "dotenv": "^16.4.7",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "ts-node-dev": "  ^2.0.0"
   }
 }
