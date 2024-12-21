@@ -1,6 +1,9 @@
 import express, { Request, Response } from "express";
 import {config, configDotenv} from "dotenv";
 
+// Backend app with node.js, express.js and typescript
+
+
 // Create a new express application instance
 const app = express();
 
