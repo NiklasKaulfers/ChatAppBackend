@@ -10,7 +10,7 @@ const app = express();
 configDotenv()
 
 // Set the network port
-const port = process.env.PORT || 3000;
+const port = 80;
 
 // Define the root path with a greeting message
 app.get("/", (req: Request, res: Response) => {
