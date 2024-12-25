@@ -3,5 +3,3 @@ import * as rest from "./rest"
 
 
 chatHandling.chat();
-
-rest.api();
