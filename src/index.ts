@@ -1,23 +1,20 @@
-import express, { Request, Response } from "express";
-import {config, configDotenv} from "dotenv";
-
-// Backend app with node.js, express.js and typescript
+import * as WebSocket from "ws";
 
 
-// Create a new express application instance
-const app = express();
 
-configDotenv()
+const server = new WebSocket.Server;
 
-// Set the network port
-const port = 80;
-
-// Define the root path with a greeting message
-app.get("/", (req: Request, res: Response) => {
-    res.json({ message: "Welcome to the Express + TypeScript Server!" });
-});
-
-// Start the Express server
-app.listen(port, () => {
-    console.log(`The server is running at http://localhost:${port}`);
-});
+server.on("connection", (socket:WebSocket) => {
+    console.log("Client connected.");
+    socket.on("message", (message) =>{
+        console.log(`Received message ${message}`);
+        socket.send(`Message: ${message}`);
+    });
+    socket.on("close", () =>{
+        console.log("Client disconnected.");
+    });
+    socket.on("error", (error:Error) =>{
+        console.log(`Error: ${error.message}`)
+    });
+    socket.send("Welcome to WS.")
+})
