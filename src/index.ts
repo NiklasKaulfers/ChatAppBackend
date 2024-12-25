@@ -25,7 +25,7 @@ server.on("connection", (socket: ExtendedWebSocket) => {
     });
 
     // Broadcast incoming messages to all connected clients except the sender
-    socket.on("message", (message) => {
+    socket.on("message", (message:String) => {
         server.clients.forEach((client) => {
             if (client !== socket && client.readyState === WebSocket.OPEN) {
                 client.send(message);
