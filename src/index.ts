@@ -28,7 +28,7 @@ server.on("connection", (socket: ExtendedWebSocket) => {
     socket.on("message", (message:String) => {
         server.clients.forEach((client) => {
             if (client !== socket && client.readyState === WebSocket.OPEN) {
-                client.send(message);
+                client.send(JSON.stringify({user: client, message:message}));
             }
         });
     });
