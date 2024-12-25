@@ -1,5 +1,6 @@
 import * as WebSocket from "ws";
 import * as http from "http";
+import {RawData} from "ws";
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
@@ -28,10 +29,11 @@ server.on("connection", (socket: ExtendedWebSocket) => {
 
     // Broadcast message to all clients except the sender
     socket.on("message", (message: string) => {
-        console.log(`Received message: ${message}`);
+        const messageString: string = JSON.parse(message).message
+        console.log(`Received message: ${messageString}`);
         const broadcastMessage = JSON.stringify({
             user: socket.id,
-            message: message,
+            message: messageString,
         });
         console.log("Broadcasting message:", broadcastMessage);
         server.clients.forEach((client) => {
