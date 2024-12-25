@@ -7,7 +7,7 @@ export const api = () =>{
     const app: Express = express();
 
 // Define the root path with a greeting message
-    app.get("/", (req: Request, res: Response) => {
+    app.get("/api/", (req: Request, res: Response) => {
         res.json({message: "Welcome to the Express + TypeScript Server!"});
     });
 
