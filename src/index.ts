@@ -8,9 +8,11 @@ interface ExtendedWebSocket extends WebSocket {
 const httpServer = http.createServer();
 const server = new WebSocket.Server({ server: httpServer });
 
-httpServer.listen(8080, () => {
-    console.log("Server is listening on port 8080");
+const PORT = process.env.PORT || 8080;
+httpServer.listen(PORT, () => {
+    console.log(`Server is listening on port ${PORT}`);
 });
+
 
 server.on("connection", (socket: ExtendedWebSocket) => {
     console.log("Client connected.");
