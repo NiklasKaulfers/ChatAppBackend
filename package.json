@@ -17,20 +17,16 @@
   "author": "Niklas Kaulfers",
   "license": "ISC",
   "dependencies": {
-    "body-parser": "^1.20.3",
-    "cookie-parser": "^1.4.7",
-    "debug": "^4.4.0",
     "express": "^4.21.2",
-    "jade": "^1.11.0",
-    "morgan": "^1.10.0",
     "node": "^23.5.0",
+    "pg": "^8.13.1",
     "serve-favicon": "^2.5.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/debug": "^4.1.12",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
     "@types/ws": "^8.5.13",
     "dotenv": "^16.4.7",
     "ts-node-dev": "  ^2.0.0",
