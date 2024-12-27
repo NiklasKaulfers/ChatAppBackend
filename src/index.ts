@@ -2,4 +2,5 @@ import * as chatHandling from "./chatHandling"
 import * as rest from "./rest"
 
 
-chatHandling.chat();
+//chatHandling.chat();
+rest.api();
