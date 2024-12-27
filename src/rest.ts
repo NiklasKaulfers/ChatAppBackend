@@ -1,6 +1,6 @@
 import * as WebSocket from "ws";
 import * as http from "http";
-import express from "express";
+import express, {Request, Response} from "express";
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
@@ -13,15 +13,12 @@ const app = express();
 app.use(express.json());
 
 // Define a REST API endpoint
-app.get("/api/status", (req, res) => {
+app.get("/api/status", (req: Request, res: Response): void => {
     res.json({ status: "Server is running", connectedClients: server.clients.size });
 });
 
-app.post("/api/message", (req, res) => {
+app.post("/api/message", (req: Request, res: Response) => {
     const { message } = req.body;
-    if (!message) {
-        return res.status(400).json({ error: "Message is required" });
-    }
 
     // Broadcast the message to all WebSocket clients
     server.clients.forEach((client) => {
