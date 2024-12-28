@@ -1,5 +1,6 @@
 import * as WebSocket from "ws";
 import * as http from "http";
+import pg from "pg";
 import express, {Request, Response} from "express";
 
 interface ExtendedWebSocket extends WebSocket {
@@ -29,6 +30,32 @@ app.post("/api/message", (req: Request, res: Response) => {
 
     res.status(200).json({ message: "Message broadcasted to WebSocket clients." });
 });
+
+
+app.post("/api/users", (req: Request, res: Response) => {
+    const client = new pg.Client();
+    const newUser:string = JSON.parse(req.body.user);
+    const newUserEmail:string = JSON.parse(req.body.email);
+    const newUserPassword:string = JSON.parse(req.body.password);
+    try {
+        const connectedToPg = async () => await client.connect();
+        if (!connectedToPg) {
+            res.status(400).json({ error: "Postgres not connected" });
+        }
+        client.query('INSERT INTO users (id, email, pin) values (' + newUser + "," + newUserEmail + "," + newUserPassword + ")");
+    } catch (err){
+        console.error(err);
+        res.status(500).json({
+            message: "Something went wrong with postgres.",
+        })
+    } finally {
+        const disconnect = async () => await client.end();
+        if (!disconnect) {
+            res.status(400).json({ error: "Postgres is having issues" });
+        }
+    }
+    res.status(200).json({ message: `User ${newUser} has been created.` });
+})
 
 // Create the HTTP server
 const httpServer = http.createServer(app);
