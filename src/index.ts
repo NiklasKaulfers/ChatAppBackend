@@ -22,7 +22,7 @@ const app = express();
 
 app.use(express.json());
 app.use(cors({
-    origin: "https://niklaskaulfers.github.io",
+    origin: "https://niklaskaulfers.github.io/web-eng-hszg-iib23-chat",
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Authorization", "Content-Type"]
 }));
