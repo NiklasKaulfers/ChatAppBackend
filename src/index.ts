@@ -57,6 +57,9 @@ app.post("/api/users", (req: Request, res: Response) => {
     const newUser:string = JSON.stringify(req.body["user"]);
     const newUserEmail:string = JSON.stringify(req.body["email"]);
     const newUserPassword:string = JSON.stringify(req.body["password"]);
+    const hashedPassword:(newUserPassword) => Promise<string>  =async (newUserPassword) => {
+        return await bcrypt.hash(newUserPassword, 10);
+    }
     try {
         const connectedToPg: () => Promise<void> = async (): Promise<void> => await client.connect();
         if (!connectedToPg) {
@@ -66,7 +69,7 @@ app.post("/api/users", (req: Request, res: Response) => {
             throw new Error("Invalid user email address or username.");
         }
         if (!newUserEmail) {
-            client.query("INSERT INTO users (id, pin) values ('" + newUser + "','" + newUserPassword + "')", (err, result) =>{
+            client.query("INSERT INTO users (id, pin) values ('" + newUser + "','" + hashedPassword + "')", (err, result) =>{
                 if (err) throw err;
                 const disconnect: ()=>Promise<void> = async (): Promise<void> => await client.end();
                 if (!disconnect) {
@@ -75,7 +78,7 @@ app.post("/api/users", (req: Request, res: Response) => {
             });
 
         } else {
-            client.query("INSERT INTO users (id, email, pin) values ('" + newUser + "','" + newUserEmail + "','" + newUserPassword + "')", (err, result) => {
+            client.query("INSERT INTO users (id, email, pin) values ('" + newUser + "','" + newUserEmail + "','" + hashedPassword + "')", (err, result) => {
                 if (err) throw err;
                 const disconnect: () => Promise<void> = async (): Promise<void> => await client.end();
                 if (!disconnect) {
@@ -104,7 +107,8 @@ app.get("/api/users/:user", (req: Request, res: Response):void => {
     pool.query("SELECT id, email FROM users WHERE id = $1", [userToFind], (err, result) => {
         if (err) {
             console.error(err);
-            return res.status(500).json({ error: "Database error occurred." });
+            res.status(500).json({ error: "Database error occurred." });
+            return;
         }
 
         if (result.rows.length > 0) {
@@ -134,11 +138,13 @@ app.post("/api/login", (req: Request, res: Response) => {
     pool.query("SELECT id, pin FROM users WHERE id = $1", [username], async (err, result) => {
         if (err) {
             console.error(err);
-            return res.status(500).json({ error: "Database error." });
+            res.status(500).json({ error: "Database error." });
+            return;
         }
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: "User not found." });
+            res.status(404).json({ error: "User not found." });
+            return ;
         }
 
         const user = result.rows[0];
@@ -147,7 +153,8 @@ app.post("/api/login", (req: Request, res: Response) => {
         const passwordMatch = await verifyPassword(password, user.pin);
 
         if (!passwordMatch) {
-            return res.status(401).json({ error: "Incorrect password." });
+            res.status(401).json({ error: "Incorrect password." });
+            return ;
         }
 
         // Password is correct, generate JWT token
@@ -167,24 +174,34 @@ app.post("/api/login", (req: Request, res: Response) => {
 
 // Protect a route with JWT authentication
 app.get("/api/protected", (req: Request, res: Response) => {
-    const token: string = JSON.stringify(req.headers["authorization"]).split(' ')[1];  // Extract token from the Authorization header
+    const authHeader = req.headers["authorization"];
+
+    if (!authHeader) {
+        res.status(401).json({ error: "No token provided." });
+        return ;
+    }
+
+    const token = authHeader.split(' ')[1]; // This will extract the token after "Bearer"
 
     if (!token) {
-        res.status(401).json({ error: "No token provided." });
+        res.status(401).json({ error: "Token missing or malformed." });
         return;
     }
 
     // Verify the token
     jwt.verify(token, process.env.JWT_SECRET || "your_jwt_secret", (err, decoded) => {
         if (err) {
-            return res.status(403).json({ error: "Invalid token." });
+            res.status(403).json({ error: "Invalid token." });
+            return;
         }
 
-        // Access decoded user info from the token
+        // Token is valid, send a protected response
         const { userId } = decoded as { userId: string };
         res.status(200).json({ message: `Welcome user ${userId}` });
+        return ;
     });
 });
+
 
 
 
