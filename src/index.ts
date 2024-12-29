@@ -77,14 +77,14 @@ app.post("/api/users", (req: Request, res: Response) => {
     res.status(200).json({ message: `User ${newUser} has been created.` });
 })
 
-app.get("api/users/:userID", (req: Request, res: Response) => {
+app.get("api/users", (req: Request, res: Response) => {
     const client = new pg.Client({
         connectionString: process.env.DATABASE_URL,
         ssl: {
             rejectUnauthorized: false
         }
     });
-    const userToFind = req.query.userID;
+    const userToFind = JSON.stringify(req.body["user"]);
     if (userToFind) {
         client.query("SELECT id, email FROM users where id = '" + userToFind + "';", (err, result) => {
             if (err) throw err;
