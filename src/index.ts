@@ -2,6 +2,8 @@ import * as WebSocket from "ws";
 import * as http from "http";
 import pg from "pg";
 import express, {Request, Response} from "express";
+import bcrypt from "bcryptjs";  // For password hashing
+import jwt from "jsonwebtoken";
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
@@ -105,6 +107,78 @@ app.get("/api/users/:user", (req: Request, res: Response):void => {
         }
     });
 });
+
+// Helper function to compare passwords
+const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
+    return await bcrypt.compare(inputPassword, storedPassword);
+};
+
+// Login API: POST /api/login
+app.post("/api/login", (req: Request, res: Response) => {
+    const { username, password } = req.body;
+
+    // Validate input
+    if (!username || !password) {
+        res.status(400).json({ error: "Username and password are required." });
+        return;
+    }
+
+    // Query the database to get the user
+    pool.query("SELECT id, pin FROM users WHERE id = $1", [username], async (err, result) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: "Database error." });
+        }
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "User not found." });
+        }
+
+        const user = result.rows[0];
+
+        // Verify password
+        const passwordMatch = await verifyPassword(password, user.pin);
+
+        if (!passwordMatch) {
+            return res.status(401).json({ error: "Incorrect password." });
+        }
+
+        // Password is correct, generate JWT token
+        const token = jwt.sign(
+            { userId: user.id },  // Payload (user info in the token)
+            process.env.JWT_SECRET || "your_jwt_secret",  // Secret key to sign the token
+            { expiresIn: "1h" }  // Token expiration (e.g., 1 hour)
+        );
+
+        // Send back the success response with the token
+        res.status(200).json({
+            message: "Login successful.",
+            token: token,
+        });
+    });
+});
+
+// Protect a route with JWT authentication
+app.get("/api/protected", (req: Request, res: Response) => {
+    const token: string = JSON.stringify(req.headers["authorization"]).split(' ')[1];  // Extract token from the Authorization header
+
+    if (!token) {
+        res.status(401).json({ error: "No token provided." });
+        return;
+    }
+
+    // Verify the token
+    jwt.verify(token, process.env.JWT_SECRET || "your_jwt_secret", (err, decoded) => {
+        if (err) {
+            return res.status(403).json({ error: "Invalid token." });
+        }
+
+        // Access decoded user info from the token
+        const { userId } = decoded as { userId: string };
+        res.status(200).json({ message: `Welcome user ${userId}` });
+    });
+});
+
 
 
 // Create the HTTP server
