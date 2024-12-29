@@ -77,29 +77,39 @@ app.post("/api/users", (req: Request, res: Response) => {
     res.status(200).json({ message: `User ${newUser} has been created.` });
 })
 
-app.get("api/users", (req: Request, res: Response) => {
+app.get("/api/users/:user", (req: Request, res: Response) => {
     const client = new pg.Client({
         connectionString: process.env.DATABASE_URL,
         ssl: {
             rejectUnauthorized: false
         }
     });
-    const userToFind = JSON.stringify(req.body["user"]);
+
+    // Access user from the URL parameter
+    const userToFind = req.params.user;
+
     if (userToFind) {
-        client.query("SELECT id, email FROM users where id = '" + userToFind + "';", (err, result) => {
-            if (err) throw err;
-            if (result) {
-                res.status(200).json({message: `User ${result.rows} has been finished.`});
+        client.query("SELECT id, email FROM users WHERE id = $1", [userToFind], (err, result) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: "Database error occurred." });
             }
-            const disconnect: () => Promise<void> = async (): Promise<void> => await client.end();
-            if (!disconnect) {
-                res.status(400).json({error: "Postgres is having issues"});
+
+            if (result.rows.length > 0) {
+                // Send back user details
+                res.status(200).json({ message: `User found: ${JSON.stringify(result.rows[0])}` });
+            } else {
+                res.status(404).json({ error: "User not found." });
             }
+
+            // Close the connection
+            client.end();
         });
     } else {
-        res.status(400).json({error: "It needs to be exactly one user. Cant parse Arrays or null."});
+        res.status(400).json({ error: "Missing user parameter." });
     }
-})
+});
+
 
 
 // Create the HTTP server
