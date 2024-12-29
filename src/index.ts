@@ -27,12 +27,13 @@ app.get("/api/status", (req: Request, res: Response): void => {
 });
 
 app.post("/api/message", (req: Request, res: Response) => {
-    const { message } = req.body;
+    const { message } = req.body["message"];
+    const user:string = JSON.stringify(req.body["user"]);
 
     // Broadcast the message to all WebSocket clients
     server.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ user: "API", message }));
+            client.send(JSON.stringify({ user: user, message }));
         }
     });
 
