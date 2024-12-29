@@ -45,68 +45,41 @@ app.post("/api/message", (req: Request, res: Response) => {
 
     res.status(200).json({ message: "Message broadcasted to WebSocket clients." });
 });
+app.post("/api/users", async (req: Request, res: Response) => {
+    const { user, email, password }= req.body;
 
-
-app.post("/api/users", (req: Request, res: Response) => {
-    const client = new pg.Client({
-        connectionString: process.env.DATABASE_URL,
-        ssl: {
-            rejectUnauthorized: false
-        }
-    });
-    const newUser:string = JSON.stringify(req.body["user"]);
-    const newUserEmail:string = JSON.stringify(req.body["email"]);
-    const newUserPassword  = async () => {
-        return await bcrypt.hash(JSON.stringify(req.body["password"]), 10);
-    }
-    if (!newUserPassword){
-        res.status(400).json({error: "Problem encrypting password."})
+    if (!user || !email || !password) {
+        res.status(400).json({ error: "User, email, and password are required." });
         return;
     }
+
     try {
-        const connectedToPg: () => Promise<void> = async (): Promise<void> => await client.connect();
-        if (!connectedToPg) {
-            res.status(400).json({ error: "Postgres not connected" });
-        }
-        if (!newUser || !newUserPassword) {
-            throw new Error("Invalid user email address or username.");
-        }
-        if (!newUserEmail) {
-            client
-                .query("INSERT INTO users (id, pin) values ('"
-                    + newUser + "','"
-                    + newUserPassword + "')"
-                    , (err, result) =>{
-                if (err) throw err;
-                const disconnect: ()=>Promise<void> = async (): Promise<void> => await client.end();
-                if (!disconnect) {
-                    res.status(400).json({ error: "Postgres is having issues" });
-                }
-            });
+        // Hash the password
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-        } else {
-            client
-                .query("INSERT INTO users (id, email, pin) values ('"
-                + newUser + "','"
-                + newUserEmail + "','"
-                + newUserPassword + "')"
-                , (err, result) => {
+        const client = new pg.Client({
+            connectionString: process.env.DATABASE_URL,
+            ssl: {
+                rejectUnauthorized: false
+            }
+        });
 
-                if (err) throw err;
-                const disconnect: () => Promise<void> = async (): Promise<void> => await client.end();
-                if (!disconnect) {
-                    res.status(400).json({error: "Postgres is having issues"});
-                }
-            });
-        }
-    } catch (err){
+        await client.connect();
+
+        // Insert the user into the database
+        const query = `INSERT INTO users (id, email, pin) VALUES ($1, $2, $3)`;
+        await client.query(query, [user, email, hashedPassword]);
+
+        await client.end();
+
+        res.status(200).json({ message: `User ${user} has been created.` });
+
+    } catch (err) {
         console.error(err);
-        res.status(500).json({
-            message: "Something went wrong with postgres.",
-        })
+        res.status(500).json({ error: "Something went wrong with Postgres." });
     }
-    res.status(200).json({ message: `User ${newUser} has been created.` });
-})
+});
+
 
 app.get("/api/users/:user", (req: Request, res: Response):void => {
     const userToFind = req.params.user;
