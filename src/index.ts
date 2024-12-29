@@ -74,6 +74,27 @@ app.post("/api/users", (req: Request, res: Response) => {
     res.status(200).json({ message: `User ${newUser} has been created.` });
 })
 
+app.get("api/users", (req: Request, res: Response) => {
+    const client = new pg.Client({
+        connectionString: process.env.DATABASE_URL,
+        ssl: {
+            rejectUnauthorized: false
+        }
+    });
+    const userToFind:string = req.body.user;
+    client.query("SELECT id, email FROM users where id = " + userToFind + ";", (err, result) =>{
+        if (err) throw err;
+        if (result) {
+            res.status(200).json({message: `User ${result.rows} has been finished.`});
+        }
+        const disconnect: ()=>Promise<void> = async (): Promise<void> => await client.end();
+        if (!disconnect) {
+            res.status(400).json({ error: "Postgres is having issues" });
+        }
+    });
+})
+
+
 // Create the HTTP server
 const httpServer = http.createServer(app);
 
