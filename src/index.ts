@@ -48,12 +48,6 @@ app.post("/api/message", (req: Request, res: Response) => {
 
 
 app.post("/api/users", (req: Request, res: Response) => {
-    const client = new pg.Client({
-        connectionString: process.env.DATABASE_URL,
-        ssl: {
-            rejectUnauthorized: false
-        }
-    });
     const newUser:string = JSON.stringify(req.body["user"]);
     const newUserEmail:string = JSON.stringify(req.body["email"]);
     const newUserPassword  = async () => {
@@ -64,28 +58,20 @@ app.post("/api/users", (req: Request, res: Response) => {
         return;
     }
     try {
-        const connectedToPg: () => Promise<void> = async (): Promise<void> => await client.connect();
-        if (!connectedToPg) {
-            res.status(400).json({ error: "Postgres not connected" });
-        }
         if (!newUser || !newUserPassword) {
             throw new Error("Invalid user email address or username.");
         }
         if (!newUserEmail) {
-            client
+            pool
                 .query("INSERT INTO users (id, pin) values ('"
                     + newUser + "','"
                     + newUserPassword + "')"
                     , (err, result) =>{
                 if (err) throw err;
-                const disconnect: ()=>Promise<void> = async (): Promise<void> => await client.end();
-                if (!disconnect) {
-                    res.status(400).json({ error: "Postgres is having issues" });
-                }
             });
 
         } else {
-            client
+            pool
                 .query("INSERT INTO users (id, email, pin) values ('"
                 + newUser + "','"
                 + newUserEmail + "','"
@@ -93,10 +79,6 @@ app.post("/api/users", (req: Request, res: Response) => {
                 , (err, result) => {
 
                 if (err) throw err;
-                const disconnect: () => Promise<void> = async (): Promise<void> => await client.end();
-                if (!disconnect) {
-                    res.status(400).json({error: "Postgres is having issues"});
-                }
             });
         }
     } catch (err){
