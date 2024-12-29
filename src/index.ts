@@ -39,9 +39,9 @@ app.post("/api/users", (req: Request, res: Response) => {
             rejectUnauthorized: false
         }
     });
-    const newUser:string = JSON.stringify(req.body.user);
-    const newUserEmail:string = JSON.stringify(req.body.email);
-    const newUserPassword:string = JSON.stringify(req.body.password);
+    const newUser:string = JSON.stringify(req.body["user"]);
+    const newUserEmail:string = JSON.stringify(req.body["email"]);
+    const newUserPassword:string = JSON.stringify(req.body["password"]);
     try {
         const connectedToPg: () => Promise<void> = async (): Promise<void> => await client.connect();
         if (!connectedToPg) {
