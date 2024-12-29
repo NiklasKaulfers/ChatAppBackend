@@ -33,26 +33,43 @@ app.post("/api/message", (req: Request, res: Response) => {
 
 
 app.post("/api/users", (req: Request, res: Response) => {
-    const client = new pg.Client();
+    const client = new pg.Client({
+        connectionString: process.env.DATABASE_URL,
+        ssl: {
+            rejectUnauthorized: false
+        }
+    });
     const newUser:string = JSON.parse(req.body.user);
     const newUserEmail:string = JSON.parse(req.body.email);
     const newUserPassword:string = JSON.parse(req.body.password);
     try {
-        const connectedToPg = async () => await client.connect();
+        const connectedToPg: () => Promise<void> = async (): Promise<void> => await client.connect();
         if (!connectedToPg) {
             res.status(400).json({ error: "Postgres not connected" });
         }
-        client.query('INSERT INTO users (id, email, pin) values (' + newUser + "," + newUserEmail + "," + newUserPassword + ")");
+        if (!newUserEmail) {
+            client.query('INSERT INTO users (id, pin) values (' + newUser + "," + newUserPassword + ")", (err, result) =>{
+                if (err) throw err;
+                const disconnect: ()=>Promise<void> = async (): Promise<void> => await client.end();
+                if (!disconnect) {
+                    res.status(400).json({ error: "Postgres is having issues" });
+                }
+            });
+
+        } else {
+            client.query('INSERT INTO users (id, email, pin) values (' + newUser + "," + newUserEmail + "," + newUserPassword + ")", (err, result) => {
+                if (err) throw err;
+                const disconnect: () => Promise<void> = async (): Promise<void> => await client.end();
+                if (!disconnect) {
+                    res.status(400).json({error: "Postgres is having issues"});
+                }
+            });
+        }
     } catch (err){
         console.error(err);
         res.status(500).json({
             message: "Something went wrong with postgres.",
         })
-    } finally {
-        const disconnect = async () => await client.end();
-        if (!disconnect) {
-            res.status(400).json({ error: "Postgres is having issues" });
-        }
     }
     res.status(200).json({ message: `User ${newUser} has been created.` });
 })
@@ -74,6 +91,23 @@ const generateClientId = () => Math.random().toString(36).substr(2, 9);
 
 // Handle WebSocket connections
 server.on("connection", (socket: ExtendedWebSocket) => {
+   serverOnConnection(socket);
+});
+
+// Periodically ping clients to ensure they're alive
+setInterval(() => {
+    server.clients.forEach((client) => {
+        const extendedClient = client as ExtendedWebSocket;
+        if (!extendedClient.isAlive) {
+            console.log(`Terminating inactive client: ${extendedClient.id}`);
+            return client.terminate();
+        }
+        extendedClient.isAlive = false;
+        client.ping();
+    });
+}, 30000);
+
+function serverOnConnection(socket: ExtendedWebSocket) {
     socket.id = generateClientId();
     socket.isAlive = true;
 
@@ -104,17 +138,4 @@ server.on("connection", (socket: ExtendedWebSocket) => {
     });
 
     socket.send(JSON.stringify({ user: "Server", message: "Welcome to WebSocket!" }));
-});
-
-// Periodically ping clients to ensure they're alive
-setInterval(() => {
-    server.clients.forEach((client) => {
-        const extendedClient = client as ExtendedWebSocket;
-        if (!extendedClient.isAlive) {
-            console.log(`Terminating inactive client: ${extendedClient.id}`);
-            return client.terminate();
-        }
-        extendedClient.isAlive = false;
-        client.ping();
-    });
-}, 30000);
+}
