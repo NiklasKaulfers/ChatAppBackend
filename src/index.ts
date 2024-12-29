@@ -4,6 +4,7 @@ import pg from "pg";
 import express, {Request, Response} from "express";
 import bcrypt from "bcryptjs";  // For password hashing
 import jwt from "jsonwebtoken";
+import cors from "cors";
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
@@ -20,6 +21,11 @@ const pool = new pg.Pool({
 const app = express();
 
 app.use(express.json());
+app.use(cors({
+    origin: "https://niklaskaulfers.github.io",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Authorization", "Content-Type"]
+}));
 
 // Define a REST API endpoint
 app.get("/api/status", (req: Request, res: Response): void => {
