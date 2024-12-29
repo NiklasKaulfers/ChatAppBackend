@@ -47,7 +47,7 @@ app.post("/api/users", (req: Request, res: Response) => {
         if (!connectedToPg) {
             res.status(400).json({ error: "Postgres not connected" });
         }
-        if (newUser.length <= 3 || newUserEmail.length <= 3) {
+        if (!newUser || !newUserPassword) {
             throw new Error("Invalid user email address or username.");
         }
         if (!newUserEmail) {
