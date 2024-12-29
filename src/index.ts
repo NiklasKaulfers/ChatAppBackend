@@ -47,8 +47,11 @@ app.post("/api/users", (req: Request, res: Response) => {
         if (!connectedToPg) {
             res.status(400).json({ error: "Postgres not connected" });
         }
+        if (newUser.length <= 3 || newUserEmail.length <= 3) {
+            throw new Error("Invalid user email address or username.");
+        }
         if (!newUserEmail) {
-            client.query('INSERT INTO users (id, pin) values (' + newUser + "," + newUserPassword + ")", (err, result) =>{
+            client.query("INSERT INTO users (id, pin) values ('" + newUser + "','" + newUserPassword + "')", (err, result) =>{
                 if (err) throw err;
                 const disconnect: ()=>Promise<void> = async (): Promise<void> => await client.end();
                 if (!disconnect) {
@@ -57,7 +60,7 @@ app.post("/api/users", (req: Request, res: Response) => {
             });
 
         } else {
-            client.query('INSERT INTO users (id, email, pin) values (' + newUser + "," + newUserEmail + "," + newUserPassword + ")", (err, result) => {
+            client.query("INSERT INTO users (id, email, pin) values ('" + newUser + "','" + newUserEmail + "','" + newUserPassword + "')", (err, result) => {
                 if (err) throw err;
                 const disconnect: () => Promise<void> = async (): Promise<void> => await client.end();
                 if (!disconnect) {
