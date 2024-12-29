@@ -1,9 +1,8 @@
 import * as WebSocket from "ws";
 import * as http from "http";
 import pg from "pg";
-import express, { Request, Response, NextFunction } from "express";
+import express, {Request, Response} from "express";
 
-// Extend WebSocket to track client state
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
     id: string;
@@ -11,109 +10,138 @@ interface ExtendedWebSocket extends WebSocket {
 
 // Initialize Express app
 const app = express();
+
 app.use(express.json());
 
-// PostgreSQL connection pool
-const pool = new pg.Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-});
-
-// WebSocket server setup
-const httpServer = http.createServer(app);
-const server = new WebSocket.Server({ server: httpServer });
-
-const PORT = process.env.PORT || 8080;
-
-// REST API Endpoint to check status
+// Define a REST API endpoint
 app.get("/api/status", (req: Request, res: Response): void => {
     res.json({ status: "Server is running", connectedClients: server.clients.size });
 });
 
-// REST API Endpoint to create a user
+app.post("/api/message", (req: Request, res: Response) => {
+    const { message } = req.body;
+
+    // Broadcast the message to all WebSocket clients
+    server.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ user: "API", message }));
+        }
+    });
+
+    res.status(200).json({ message: "Message broadcasted to WebSocket clients." });
+});
+
+
 app.post("/api/users", (req: Request, res: Response) => {
-    const { user, email, password } = req.body;
+    const client = new pg.Client({
+        connectionString: process.env.DATABASE_URL,
+        ssl: {
+            rejectUnauthorized: false
+        }
+    });
+    const newUser:string = req.body.user;
+    const newUserEmail:string = req.body.email;
+    const newUserPassword:string = req.body.password;
+    try {
+        const connectedToPg: () => Promise<void> = async (): Promise<void> => await client.connect();
+        if (!connectedToPg) {
+            res.status(400).json({ error: "Postgres not connected" });
+        }
+        if (newUser.length <= 3 || newUserEmail.length <= 3) {
+            throw new Error("Invalid user email address or username.");
+        }
+        if (!newUserEmail) {
+            client.query("INSERT INTO users (id, pin) values ('" + newUser + "','" + newUserPassword + "')", (err, result) =>{
+                if (err) throw err;
+                const disconnect: ()=>Promise<void> = async (): Promise<void> => await client.end();
+                if (!disconnect) {
+                    res.status(400).json({ error: "Postgres is having issues" });
+                }
+            });
 
-    // Basic validation
-    if (!user || user.length <= 3 || !password || password.length <= 3) {
-        return res.status(400).json({
-            error: "Invalid username or password. Must be at least 3 characters long.",
-        });
+        } else {
+            client.query("INSERT INTO users (id, email, pin) values ('" + newUser + "','" + newUserEmail + "','" + newUserPassword + "')", (err, result) => {
+                if (err) throw err;
+                const disconnect: () => Promise<void> = async (): Promise<void> => await client.end();
+                if (!disconnect) {
+                    res.status(400).json({error: "Postgres is having issues"});
+                }
+            });
+        }
+    } catch (err){
+        console.error(err);
+        res.status(500).json({
+            message: "Something went wrong with postgres.",
+        })
     }
+    res.status(200).json({ message: `User ${newUser} has been created.` });
+})
 
-    // Establish connection to PostgreSQL
+app.get("api/users/:user", (req: Request, res: Response) => {
     const client = new pg.Client({
         connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false },
-    });
-
-    client.connect((err) => {
-        if (err) {
-            console.error("Failed to connect to PostgreSQL:", err.message);
-            return res.status(500).json({ error: "Database connection failed." });
+        ssl: {
+            rejectUnauthorized: false
         }
-
-        const query = email
-            ? "INSERT INTO users (id, email, pin) VALUES ($1, $2, $3)"
-            : "INSERT INTO users (id, pin) VALUES ($1, $2)";
-        const params = email ? [user, email, password] : [user, password];
-
-        // Execute the query
-        client.query(query, params, (queryErr) => {
-            client.end(); // Close the connection
-            if (queryErr) {
-                console.error("Error executing query:", queryErr.message);
-                return res.status(500).json({ error: "Failed to create user." });
+    });
+    const userToFind = req.query.user;
+    if (userToFind instanceof String) {
+        client.query("SELECT id, email FROM users where id = " + userToFind + ";", (err, result) => {
+            if (err) throw err;
+            if (result) {
+                res.status(200).json({message: `User ${result.rows} has been finished.`});
             }
-
-            res.status(201).json({ message: `User ${user} created successfully.` });
+            const disconnect: () => Promise<void> = async (): Promise<void> => await client.end();
+            if (!disconnect) {
+                res.status(400).json({error: "Postgres is having issues"});
+            }
         });
-    });
+    } else {
+        res.status(400).json({error: "It needs to be exactly one user. Cant parse Arrays or null."});
+    }
+})
+
+
+// Create the HTTP server
+const httpServer = http.createServer(app);
+
+// Create the WebSocket server
+const server = new WebSocket.Server({ server: httpServer });
+
+const PORT = process.env.PORT || 8080;
+
+httpServer.listen(PORT, () => {
+    console.log(`Server is listening on port ${PORT}`);
 });
 
-// Get user info from the database
-app.get("/api/users/:user", (req: Request, res: Response) => {
-    const client = new pg.Client({
-        connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false },
-    });
+// Function to generate unique IDs for WebSocket clients
+const generateClientId = () => Math.random().toString(36).substr(2, 9);
 
-    const userToFind = req.params.user;
-
-    client.connect((err) => {
-        if (err) {
-            console.error("Failed to connect to PostgreSQL:", err.message);
-            return res.status(500).json({ error: "Database connection failed." });
-        }
-
-        client.query(
-            "SELECT id, email FROM users WHERE id = $1",
-            [userToFind],
-            (queryErr, result) => {
-                client.end(); // Close the connection
-                if (queryErr) {
-                    console.error("Error executing query:", queryErr.message);
-                    return res.status(500).json({ error: "Failed to fetch user." });
-                }
-
-                if (result.rows.length === 0) {
-                    return res.status(404).json({ error: "User not found." });
-                }
-
-                res.status(200).json(result.rows[0]);
-            }
-        );
-    });
-});
-
-// WebSocket connection management
+// Handle WebSocket connections
 server.on("connection", (socket: ExtendedWebSocket) => {
+   serverOnConnection(socket);
+});
+
+// Periodically ping clients to ensure they're alive
+setInterval(() => {
+    server.clients.forEach((client) => {
+        const extendedClient = client as ExtendedWebSocket;
+        if (!extendedClient.isAlive) {
+            console.log(`Terminating inactive client: ${extendedClient.id}`);
+            return client.terminate();
+        }
+        extendedClient.isAlive = false;
+        client.ping();
+    });
+}, 30000);
+
+function serverOnConnection(socket: ExtendedWebSocket) {
     socket.id = generateClientId();
     socket.isAlive = true;
 
     console.log(`Client connected: ${socket.id}`);
 
-    // Respond to incoming WebSocket messages
+    // Respond to WebSocket messages
     socket.on("message", (message: string) => {
         console.log(`Received message from ${socket.id}: ${message}`);
 
@@ -137,31 +165,5 @@ server.on("connection", (socket: ExtendedWebSocket) => {
         console.error(`WebSocket error: ${error.message}`);
     });
 
-    // Send a welcome message to the newly connected client
     socket.send(JSON.stringify({ user: "Server", message: "Welcome to WebSocket!" }));
-});
-
-// Periodically ping clients to ensure they are alive
-setInterval(() => {
-    server.clients.forEach((client) => {
-        const extendedClient = client as ExtendedWebSocket;
-
-        if (!extendedClient.isAlive) {
-            console.log(`Terminating inactive client: ${extendedClient.id}`);
-            return client.terminate();
-        }
-
-        extendedClient.isAlive = false;
-        client.ping();
-    });
-}, 30000);
-
-// Function to generate a unique client ID
-function generateClientId() {
-    return Math.random().toString(36).substr(2, 9);
 }
-
-// Start the server
-httpServer.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
