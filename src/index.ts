@@ -56,9 +56,12 @@ app.post("/api/users", (req: Request, res: Response) => {
     });
     const newUser:string = JSON.stringify(req.body["user"]);
     const newUserEmail:string = JSON.stringify(req.body["email"]);
-    const newUserPassword:string = JSON.stringify(req.body["password"]);
-    const hashedPassword:(newUserPassword) => Promise<string>  =async (newUserPassword) => {
-        return await bcrypt.hash(newUserPassword, 10);
+    const newUserPassword  = async () => {
+        return await bcrypt.hash(JSON.stringify(req.body["password"]), 10);
+    }
+    if (!newUserPassword){
+        res.status(400).json({error: "Problem encrypting password."})
+        return;
     }
     try {
         const connectedToPg: () => Promise<void> = async (): Promise<void> => await client.connect();
@@ -69,7 +72,11 @@ app.post("/api/users", (req: Request, res: Response) => {
             throw new Error("Invalid user email address or username.");
         }
         if (!newUserEmail) {
-            client.query("INSERT INTO users (id, pin) values ('" + newUser + "','" + hashedPassword + "')", (err, result) =>{
+            client
+                .query("INSERT INTO users (id, pin) values ('"
+                    + newUser + "','"
+                    + newUserPassword + "')"
+                    , (err, result) =>{
                 if (err) throw err;
                 const disconnect: ()=>Promise<void> = async (): Promise<void> => await client.end();
                 if (!disconnect) {
@@ -78,7 +85,13 @@ app.post("/api/users", (req: Request, res: Response) => {
             });
 
         } else {
-            client.query("INSERT INTO users (id, email, pin) values ('" + newUser + "','" + newUserEmail + "','" + hashedPassword + "')", (err, result) => {
+            client
+                .query("INSERT INTO users (id, email, pin) values ('"
+                + newUser + "','"
+                + newUserEmail + "','"
+                + newUserPassword + "')"
+                , (err, result) => {
+
                 if (err) throw err;
                 const disconnect: () => Promise<void> = async (): Promise<void> => await client.end();
                 if (!disconnect) {
@@ -104,7 +117,8 @@ app.get("/api/users/:user", (req: Request, res: Response):void => {
     }
 
     // Use parameterized query to prevent SQL injection
-    pool.query("SELECT id, email FROM users WHERE id = $1", [userToFind], (err, result) => {
+    pool.query("SELECT id, email FROM users WHERE id = $1"
+        , [userToFind], (err, result) => {
         if (err) {
             console.error(err);
             res.status(500).json({ error: "Database error occurred." });
@@ -135,7 +149,8 @@ app.post("/api/login", (req: Request, res: Response) => {
     }
 
     // Query the database to get the user
-    pool.query("SELECT id, pin FROM users WHERE id = $1", [username], async (err, result) => {
+    pool.query("SELECT id, pin FROM users WHERE id = $1", [username]
+        , async (err, result) => {
         if (err) {
             console.error(err);
             res.status(500).json({ error: "Database error." });
