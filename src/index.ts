@@ -3,7 +3,6 @@ import * as http from "http";
 import pg from "pg";
 import express, {Request, Response} from "express";
 import bcrypt from "bcryptjs";  // For password hashing
-import jwt from "jsonwebtoken";
 import cors from "cors";
 
 interface ExtendedWebSocket extends WebSocket {
@@ -145,53 +144,11 @@ app.post("/api/login", (req: Request, res: Response) => {
             return ;
         }
 
-        // Password is correct, generate JWT token
-        const token = jwt.sign(
-            { userId: user.id },  // Payload (user info in the token)
-            process.env.JWT_SECRET || "your_jwt_secret",  // Secret key to sign the token
-            { expiresIn: "1h" }  // Token expiration (e.g., 1 hour)
-        );
-
-        // Send back the success response with the token
         res.status(200).json({
-            message: "Login successful.",
-            token: token,
+            message: "Login successful."
         });
     });
 });
-
-// Protect a route with JWT authentication
-app.get("/api/protected", (req: Request, res: Response) => {
-    const authHeader = req.headers["authorization"];
-
-    if (!authHeader) {
-        res.status(401).json({ error: "No token provided." });
-        return ;
-    }
-
-    const token = authHeader.split(' ')[1]; // This will extract the token after "Bearer"
-
-    if (!token) {
-        res.status(401).json({ error: "Token missing or malformed." });
-        return;
-    }
-
-    // Verify the token
-    jwt.verify(token, process.env.JWT_SECRET || "your_jwt_secret", (err, decoded) => {
-        if (err) {
-            res.status(403).json({ error: "Invalid token." });
-            return;
-        }
-
-        // Token is valid, send a protected response
-        const { userId } = decoded as { userId: string };
-        res.status(200).json({ message: `Welcome user ${userId}` });
-        return ;
-    });
-});
-
-
-
 
 // Create the HTTP server
 const httpServer = http.createServer(app);
@@ -206,7 +163,7 @@ httpServer.listen(PORT, () => {
 });
 
 // Function to generate unique IDs for WebSocket clients
-const generateClientId = () => Math.random().toString(36).substr(2, 9);
+const generateClientId = () => Math.random().toString(36).substring(2, 9);
 
 // Handle WebSocket connections
 server.on("connection", (socket: ExtendedWebSocket) => {
