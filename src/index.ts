@@ -16,6 +16,12 @@ const pool = new pg.Pool({
         rejectUnauthorized: false
     }
 });
+const client = new pg.Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
+});
 // Initialize Express app
 const app = express();
 
@@ -57,13 +63,6 @@ app.post("/api/users", async (req: Request, res: Response) => {
     try {
         // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
-
-        const client = new pg.Client({
-            connectionString: process.env.DATABASE_URL,
-            ssl: {
-                rejectUnauthorized: false
-            }
-        });
 
         await client.connect();
 
@@ -138,7 +137,9 @@ app.post("/api/rooms", (req: Request, res: Response) => {
     }
     if (!pin) {
         try {
-            pool.query("INSERT INTO Rooms (id, creator) VALUES ($1, $2)", [roomId, userID]);
+            client.connect();
+            client.query("INSERT INTO Rooms (id, creator) VALUES ($1, $2)", [roomId, userID]);
+            client.end();
         } catch (err) {
             console.error(err);
             res.status(400).json({ error: "Error creating the room." });
@@ -150,7 +151,9 @@ app.post("/api/rooms", (req: Request, res: Response) => {
             return;
         }
         try {
-            pool.query("INSERT INTO Rooms (id, pin, creator) VALUES ($1, $2, $3)", [roomId, hashedPassword, userID]);
+            client.connect();
+            client.query("INSERT INTO Rooms (id, pin, creator) VALUES ($1, $2, $3)", [roomId, hashedPassword, userID]);
+            client.end();
         } catch (err) {
             console.error(err);
             res.status(400).json({ error: "Error creating the room." });
