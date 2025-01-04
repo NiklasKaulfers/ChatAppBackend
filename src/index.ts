@@ -45,7 +45,9 @@ app.post("/api/message", (req: Request, res: Response) => {
     res.status(200).json({ message: "Message broadcasted to WebSocket clients." });
 });
 app.post("/api/users", async (req: Request, res: Response) => {
-    const { user, email, password }= req.body;
+    const user:string = req.body["user"];
+    const email:string = req.body["email"];
+    const password:string = req.body["password"];
 
     if (!user || !email || !password) {
         res.status(400).json({ error: "User, email, and password are required." });
