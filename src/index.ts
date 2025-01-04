@@ -130,14 +130,14 @@ app.post("/api/rooms", (req: Request, res: Response) => {
 
     try {
         loginAsUser(userID, userPin);
-    } catch (err) {
+    } catch (err:Error) {
         res.status(400).json({ error: err.message });
         return;
     }
     if (!pin) {
         try {
             pool.query("INSERT INTO Rooms (id, creator) VALUES ($1, $2)", [roomId, userID]);
-        } catch (err) {
+        } catch (err:Error) {
             console.error(err);
             res.status(400).json({ error: "Error creating the room." });
         }
@@ -149,7 +149,7 @@ app.post("/api/rooms", (req: Request, res: Response) => {
         }
         try {
             pool.query("INSERT INTO Rooms (id, pin, creator) VALUES ($1, $2, $3)", [roomId, hashedPassword, userID]);
-        } catch (err) {
+        } catch (err:Error) {
             console.error(err);
             res.status(400).json({ error: "Error creating the room." });
             return;
@@ -172,7 +172,7 @@ app.get("/api/rooms/:roomId", (req: Request, res: Response) => {
                res.status(404).json({ error: "User not found." });
            }
        });
-   } catch (e){
+   } catch (e:Error){
        console.error(e);
        res.status(400).json({ error: "Error getting room." });
    }
