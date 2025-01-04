@@ -105,49 +105,77 @@ app.get("/api/users/:user", (req: Request, res: Response):void => {
     });
 });
 
-// Helper function to compare passwords
-const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
-    return await bcrypt.compare(inputPassword, storedPassword);
-};
 
 // Login API: POST /api/login
 app.post("/api/login", (req: Request, res: Response) => {
     const { username, password } = req.body;
-
+    try {
+        loginAsUser(username, password);
+    } catch (err) {
+        res.status(400).json({ error: err });
+        return;
+    }
     // Validate input
     if (!username || !password) {
         res.status(400).json({ error: "Username and password are required." });
         return;
     }
+});
 
-    // Query the database to get the user
-    pool.query("SELECT id, pin FROM users WHERE id = $1", [username]
-        , async (err, result) => {
-        if (err) {
+app.post("/api/rooms", (req: Request, res: Response) => {
+    const roomId = generateClientId();
+    const { password } = req.body["pin"];0
+    const { userID } = req.body["userID"];
+    const { userPin } = req.body["userPin"];
+
+    try {
+        loginAsUser(userID, userPin);
+    } catch (err) {
+        res.status(400).json({ error: err });
+        return;
+    }
+    if (!password) {
+        try {
+            pool.query("INSERT INTO Rooms (id, creator) VALUES ($1, $2)", [roomId, userID]);
+        } catch (err) {
             console.error(err);
-            res.status(500).json({ error: "Database error." });
+            res.status(400).json({ error: "Error creating the room." });
+        }
+    } else {
+        const hashedPassword = bcrypt.hash(password, 10);
+        if (!hashedPassword) {
+            res.status(400).json({ error: "Error storing the password." });
             return;
         }
-
-        if (result.rows.length === 0) {
-            res.status(404).json({ error: "User not found." });
-            return ;
+        try {
+            pool.query("INSERT INTO Rooms (id, pin, creator) VALUES ($1, $2, $3)", [roomId, hashedPassword, userID]);
+        } catch (err) {
+            console.error(err);
+            res.status(400).json({ error: "Error creating the room." });
+            return;
         }
+    }
 
-        const user = result.rows[0];
-
-        // Verify password
-        const passwordMatch = await verifyPassword(password, user.pin);
-
-        if (!passwordMatch) {
-            res.status(401).json({ error: "Incorrect password." });
-            return ;
-        }
-
-        res.status(200).json({
-            message: "Login successful."
-        });
-    });
+})
+app.get("/api/rooms/:roomId", (req: Request, res: Response) => {
+    const roomId: string = req.params.roomId;
+   try{
+       pool.query("SELECT (id, pin, creator) FROM Rooms WHERE id = $1", [roomId], (err, result) => {
+           if (err) {
+               console.error(err);
+               res.status(500).json({ error: "Database error occurred." });
+               return;
+           }
+           if (result.rows.length > 0) {
+               res.status(200).json({ message: `Room found: ${JSON.stringify(result.rows[0])}` });
+           } else {
+               res.status(404).json({ error: "User not found." });
+           }
+       });
+   } catch (e){
+       console.error(e);
+       res.status(400).json({ error: "Error getting room." });
+   }
 });
 
 // Create the HTTP server
@@ -161,6 +189,37 @@ const PORT = process.env.PORT || 8080;
 httpServer.listen(PORT, () => {
     console.log(`Server is listening on port ${PORT}`);
 });
+
+const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
+    return await bcrypt.compare(inputPassword, storedPassword);
+};
+
+const loginAsUser = (username: string, password: string): boolean => {
+    if (!username || !password) {
+        throw new Error("Username and password are required.");
+    }
+    pool.query("SELECT id, pin FROM users WHERE id = $1", [username]
+        , async (err, result) => {
+            if (err) {
+                console.error(err);
+                throw err;
+            }
+
+            if (result.rows.length === 0) {
+                throw new Error("User not found.")
+            }
+
+            const user = result.rows[0];
+
+            // Verify password
+            const passwordMatch = await verifyPassword(password, user.pin);
+            if (!passwordMatch) {
+                throw new Error("Password is incorrect.")
+            }
+            return true;
+    });
+    return false;
+};
 
 // Function to generate unique IDs for WebSocket clients
 const generateClientId = () => Math.random().toString(36).substring(2, 9);
