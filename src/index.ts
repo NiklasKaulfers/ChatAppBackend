@@ -124,9 +124,9 @@ app.post("/api/login", (req: Request, res: Response) => {
 
 app.post("/api/rooms", (req: Request, res: Response) => {
     const roomId = generateClientId();
-    const { password } = req.body["pin"];0
-    const { userID } = req.body["userID"];
-    const { userPin } = req.body["userPin"];
+    const pin= req.body["pin"];
+    const userID = req.body["userID"];
+    const userPin = req.body["userPin"];
 
     try {
         loginAsUser(userID, userPin);
@@ -134,7 +134,7 @@ app.post("/api/rooms", (req: Request, res: Response) => {
         res.status(400).json({ error: err });
         return;
     }
-    if (!password) {
+    if (!pin) {
         try {
             pool.query("INSERT INTO Rooms (id, creator) VALUES ($1, $2)", [roomId, userID]);
         } catch (err) {
@@ -142,7 +142,7 @@ app.post("/api/rooms", (req: Request, res: Response) => {
             res.status(400).json({ error: "Error creating the room." });
         }
     } else {
-        const hashedPassword = bcrypt.hash(password, 10);
+        const hashedPassword = bcrypt.hash(pin, 10);
         if (!hashedPassword) {
             res.status(400).json({ error: "Error storing the password." });
             return;
