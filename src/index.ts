@@ -1,59 +1,66 @@
 import * as WebSocket from "ws";
 import * as http from "http";
 import pg from "pg";
-import express, {Request, Response} from "express";
-import bcrypt from "bcryptjs";  // For password hashing
+import express, { Request, Response } from "express";
+import bcrypt from "bcryptjs";
 import cors from "cors";
+import { v4 as uuidv4 } from "uuid";
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
     id: string;
 }
 
+// Initialize PostgreSQL Pool
 const pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
-        rejectUnauthorized: false
-    }
+        rejectUnauthorized: false,
+    },
 });
-const client = new pg.Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false
-    }
-});
+
 // Initialize Express app
 const app = express();
-
 app.use(express.json());
-app.use(cors({
-    origin: "https://niklaskaulfers.github.io",
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Authorization", "Content-Type"]
-}));
+app.use(
+    cors({
+        origin: "https://niklaskaulfers.github.io",
+        methods: ["GET", "POST", "PUT", "DELETE"],
+        allowedHeaders: ["Authorization", "Content-Type"],
+    })
+);
 
-// Define a REST API endpoint
+// Helper Functions
+const generateClientId = (): string => uuidv4();
+
+const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
+    return bcrypt.compare(inputPassword, storedPassword);
+};
+
+// REST API Endpoints
 app.get("/api/status", (req: Request, res: Response): void => {
     res.json({ status: "Server is running", connectedClients: server.clients.size });
 });
 
 app.post("/api/message", (req: Request, res: Response) => {
-    const { message } = req.body["message"];
-    const user:string = JSON.stringify(req.body["user"]);
+    const { message, user } = req.body;
 
-    // Broadcast the message to all WebSocket clients
+    if (!message || !user) {
+        res.status(400).json({ error: "Message and user are required." });
+        return;
+    }
+
     server.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ user: user, message }));
+            client.send(JSON.stringify({ user, message }));
         }
     });
 
     res.status(200).json({ message: "Message broadcasted to WebSocket clients." });
 });
+
 app.post("/api/users", async (req: Request, res: Response) => {
-    const user:string = req.body["user"];
-    const email:string = req.body["email"];
-    const password:string = req.body["password"];
+    const { user, email, password } = req.body;
 
     if (!user || !email || !password) {
         res.status(400).json({ error: "User, email, and password are required." });
@@ -61,231 +68,129 @@ app.post("/api/users", async (req: Request, res: Response) => {
     }
 
     try {
-        // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
-
-        await client.connect();
-
-        // Insert the user into the database
-        const query = `INSERT INTO users (id, email, pin) VALUES ($1, $2, $3)`;
-        await client.query(query, [user, email, hashedPassword]);
-
-        await client.end();
-
-        res.status(200).json({ message: `User ${user} has been created.` });
-
+        await pool.query("INSERT INTO users (id, email, pin) VALUES ($1, $2, $3)", [user, email, hashedPassword]);
+        res.status(201).json({ message: `User ${user} has been created.` });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: "Something went wrong with Postgres." });
+        res.status(500).json({ error: "Something went wrong with the database." });
     }
 });
 
+app.get("/api/users/:user", async (req: Request, res: Response): Promise<void> => {
+    const { user } = req.params;
 
-app.get("/api/users/:user", (req: Request, res: Response):void => {
-    const userToFind = req.params.user;
-
-    if (!userToFind) {
-        res.status(400).json({ error: "Missing user parameter." });
-        return;
-    }
-
-    // Use parameterized query to prevent SQL injection
-    pool.query("SELECT id, email FROM users WHERE id = $1"
-        , [userToFind], (err, result) => {
-        if (err) {
-            console.error(err);
-            res.status(500).json({ error: "Database error occurred." });
-            return;
-        }
-
+    try {
+        const result = await pool.query("SELECT id, email FROM users WHERE id = $1", [user]);
         if (result.rows.length > 0) {
-            res.status(200).json({ message: `User found: ${JSON.stringify(result.rows[0])}` });
+            res.status(200).json({ user: result.rows[0] });
         } else {
             res.status(404).json({ error: "User not found." });
         }
-    });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Database error occurred." });
+    }
 });
 
-
-// Login API: POST /api/login
-app.post("/api/login", (req: Request, res: Response) => {
+app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
     const { username, password } = req.body;
-    if (!username || !password) {
-        res.status(400).json({ error: "Missing username or password parameter." });
-        return;
-    }
-    pool.query("SELECT id, pin FROM users WHERE id = $1", [username]
-        , async (err, result) => {
-            if (err) {
-                console.error(err);
-               res.status(500).json({ error: "Database error occurred." });
-               return;
-            }
 
-            if (result.rows.length === 0) {
-                res.status(404).json({ error: "No user found." });
-                return;
-            }
-
-            const user = result.rows[0];
-
-            // Verify password
-            const passwordMatch = await verifyPassword(password, user.pin);
-            if (!passwordMatch) {
-                res.status(404).json({ error: "Invalid password" });
-                return;
-            }
-            res.status(200).json({ "user": user, message: `Logged in as ${user}` });
-    // Validate input
     if (!username || !password) {
         res.status(400).json({ error: "Username and password are required." });
         return;
     }
-})
-});
-
-app.post("/api/rooms", (req: Request, res: Response) => {
-    const roomId = generateClientId();
-    const pin= req.body["pin"];
-    const userID = req.body["userID"];
-    const userPin = req.body["userPin"];
 
     try {
-        if (!userID || !userPin) {
-            res.status(400).json({error: "Missing user parameter."});
+        const result = await pool.query("SELECT id, pin FROM users WHERE id = $1", [username]);
+        if (result.rows.length === 0) {
+            res.status(404).json({ error: "No user found." });
             return;
         }
-        pool.query("SELECT id, pin FROM users WHERE id = $1", [userID]
-            , async (err, result) => {
-                if (err) {
-                    console.error(err);
-                    res.status(500).json({error: "Database error occurred."});
-                    return;
-                }
 
-                if (result.rows.length === 0) {
-                    res.status(404).json({error: "No user found."});
-                    return;
-                }
+        const user = result.rows[0];
+        const passwordMatch = await verifyPassword(password, user.pin);
 
-                const user = result.rows[0];
+        if (!passwordMatch) {
+            res.status(403).json({ error: "Invalid password." });
+            return;
+        }
 
-                // Verify password
-                const passwordMatch = await verifyPassword(userPin, user.pin);
-                if (!passwordMatch) {
-                    res.status(404).json({error: "Invalid password"});
-                    return;
-                }
-                // Validate input
-                if (!userID || !userPin) {
-                    res.status(400).json({error: "Username and password are required."});
-                    return;
-                }
-            });
-    } catch (error) {
-    console.error(error);
-    res.status(500).json({error: "Database error occurred."});
+        res.status(200).json({ message: `Logged in as ${username}` });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Database error occurred." });
     }
-    if (!pin || pin === "") {
-        try {
-            client.connect();
-            client.query("INSERT INTO Rooms (id, creator) VALUES ($1, $2)", [roomId, userID]);
-            client.end();
-        } catch (err) {
-            console.error(err);
-            res.status(400).json({ error: "Error creating the room." });
-        }
-    } else {
-        const hashedPassword = bcrypt.hash(pin, 10);
-        if (!hashedPassword) {
-            res.status(400).json({ error: "Error storing the password." });
-            return;
-        }
-        try {
-            client.connect();
-            client.query("INSERT INTO Rooms (id, pin, creator) VALUES ($1, $2, $3)", [roomId, hashedPassword, userID]);
-            client.end();
-        } catch (err) {
-            console.error(err);
-            res.status(400).json({ error: "Error creating the room." });
-            return;
-        }
-    }
-
-})
-app.get("/api/rooms/:roomId", (req: Request, res: Response) => {
-    const roomId: string = req.params.roomId;
-   try{
-       pool.query("SELECT (id, pin, creator) FROM Rooms WHERE id = $1", [roomId], (err, result) => {
-           if (err) {
-               console.error(err);
-               res.status(500).json({ error: "Database error occurred." });
-               return;
-           }
-           if (result.rows.length > 0) {
-               res.status(200).json({ message: `Room found: ${JSON.stringify(result.rows[0])}` });
-           } else {
-               res.status(404).json({ error: "User not found." });
-           }
-       });
-   } catch (e){
-       console.error(e);
-       res.status(400).json({ error: "Error getting room." });
-   }
 });
 
-// Create the HTTP server
-const httpServer = http.createServer(app);
+app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
+    const { pin, userID, userPin } = req.body;
+    const roomId = generateClientId();
 
-// Create the WebSocket server
+    if (!userID || !userPin) {
+        res.status(400).json({ error: "User ID and PIN are required." });
+        return;
+    }
+
+    try {
+        const userResult = await pool.query("SELECT id, pin FROM users WHERE id = $1", [userID]);
+        if (userResult.rows.length === 0) {
+            res.status(404).json({ error: "User not found." });
+            return;
+        }
+
+        const user = userResult.rows[0];
+        const passwordMatch = await verifyPassword(userPin, user.pin);
+
+        if (!passwordMatch) {
+            res.status(403).json({ error: "Invalid user credentials." });
+            return;
+        }
+
+        if (!pin) {
+            await pool.query("INSERT INTO Rooms (id, creator) VALUES ($1, $2)", [roomId, userID]);
+        } else {
+            const hashedPassword = await bcrypt.hash(pin, 10);
+            await pool.query("INSERT INTO Rooms (id, pin, creator) VALUES ($1, $2, $3)", [roomId, hashedPassword, userID]);
+        }
+
+        res.status(201).json({ message: "Room created successfully", roomId });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Internal server error." });
+    }
+});
+
+app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
+    const { roomId } = req.params;
+
+    try {
+        const result = await pool.query("SELECT id, pin, creator FROM Rooms WHERE id = $1", [roomId]);
+        if (result.rows.length > 0) {
+            res.status(200).json({ room: result.rows[0] });
+        } else {
+            res.status(404).json({ error: "Room not found." });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Database error occurred." });
+    }
+});
+
+// Create HTTP and WebSocket Servers
+const httpServer = http.createServer(app);
 const server = new WebSocket.Server({ server: httpServer });
 
-const PORT = process.env.PORT || 8080;
-
-httpServer.listen(PORT, () => {
-    console.log(`Server is listening on port ${PORT}`);
-});
-
-const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
-    return await bcrypt.compare(inputPassword, storedPassword);
-};
-
-
-
-// Function to generate unique IDs for WebSocket clients
-const generateClientId = () => Math.random().toString(36).substring(2, 9);
-
-// Handle WebSocket connections
 server.on("connection", (socket: ExtendedWebSocket) => {
-   serverOnConnection(socket);
-});
-
-// Periodically ping clients to ensure they're alive
-setInterval(() => {
-    server.clients.forEach((client) => {
-        const extendedClient = client as ExtendedWebSocket;
-        if (!extendedClient.isAlive) {
-            console.log(`Terminating inactive client: ${extendedClient.id}`);
-            return client.terminate();
-        }
-        extendedClient.isAlive = false;
-        client.ping();
-    });
-}, 30000);
-
-function serverOnConnection(socket: ExtendedWebSocket) {
     socket.id = generateClientId();
     socket.isAlive = true;
 
     console.log(`Client connected: ${socket.id}`);
 
-    // Respond to WebSocket messages
     socket.on("message", (message: string) => {
         console.log(`Received message from ${socket.id}: ${message}`);
-
-        // Broadcast the message to all connected clients
         server.clients.forEach((client) => {
-            if (client !== socket && client.readyState === WebSocket.OPEN) {
+            if (client.readyState === WebSocket.OPEN && client !== socket) {
                 client.send(JSON.stringify({ user: socket.id, message }));
             }
         });
@@ -299,9 +204,22 @@ function serverOnConnection(socket: ExtendedWebSocket) {
         console.log(`Client disconnected: ${socket.id}`);
     });
 
-    socket.on("error", (error: Error) => {
-        console.error(`WebSocket error: ${error.message}`);
-    });
-
     socket.send(JSON.stringify({ user: "Server", message: "Welcome to WebSocket!" }));
-}
+});
+
+setInterval(() => {
+    server.clients.forEach((client) => {
+        const ws = client as ExtendedWebSocket;
+        if (!ws.isAlive) {
+            console.log(`Terminating inactive client: ${ws.id}`);
+            return client.terminate();
+        }
+        ws.isAlive = false;
+        client.ping();
+    });
+}, 30000);
+
+const PORT = process.env.PORT || 8080;
+httpServer.listen(PORT, () => {
+    console.log(`Server is listening on port ${PORT}`);
+});

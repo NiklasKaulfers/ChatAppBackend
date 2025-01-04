@@ -24,6 +24,7 @@
     "node": "^23.5.0",
     "pg": "^8.13.1",
     "serve-favicon": "^2.5.0",
+    "uuid": "^11.0.3",
     "ws": "^8.18.0"
   },
   "devDependencies": {
