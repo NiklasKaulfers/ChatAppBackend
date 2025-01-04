@@ -131,7 +131,7 @@ app.post("/api/rooms", (req: Request, res: Response) => {
     try {
         loginAsUser(userID, userPin);
     } catch (err) {
-        res.status(400).json({ error: err });
+        res.status(400).json({ error: "Issues with login." });
         return;
     }
     if (!pin) {
