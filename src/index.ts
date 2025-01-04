@@ -110,17 +110,37 @@ app.get("/api/users/:user", (req: Request, res: Response):void => {
 // Login API: POST /api/login
 app.post("/api/login", (req: Request, res: Response) => {
     const { username, password } = req.body;
-    try {
-        loginAsUser(username, password);
-    } catch (err) {
-        res.status(400).json({ error: "Username or Password are wrong." });
+    if (!username || !password) {
+        res.status(400).json({ error: "Missing user parameter." });
         return;
     }
+    pool.query("SELECT id, pin FROM users WHERE id = $1", [username]
+        , async (err, result) => {
+            if (err) {
+                console.error(err);
+               res.status(500).json({ error: "Database error occurred." });
+               return;
+            }
+
+            if (result.rows.length === 0) {
+                res.status(404).json({ error: "No user found." });
+                return;
+            }
+
+            const user = result.rows[0];
+
+            // Verify password
+            const passwordMatch = await verifyPassword(password, user.pin);
+            if (!passwordMatch) {
+                res.status(404).json({ error: "Invalid password" });
+                return;
+            }
     // Validate input
     if (!username || !password) {
         res.status(400).json({ error: "Username and password are required." });
         return;
     }
+})
 });
 
 app.post("/api/rooms", (req: Request, res: Response) => {
@@ -130,10 +150,40 @@ app.post("/api/rooms", (req: Request, res: Response) => {
     const userPin = req.body["userPin"];
 
     try {
-        loginAsUser(userID, userPin);
-    } catch (err) {
-        res.status(400).json({ error: "Issues with login." });
-        return;
+        if (!userID || !userPin) {
+            res.status(400).json({error: "Missing user parameter."});
+            return;
+        }
+        pool.query("SELECT id, pin FROM users WHERE id = $1", [userID]
+            , async (err, result) => {
+                if (err) {
+                    console.error(err);
+                    res.status(500).json({error: "Database error occurred."});
+                    return;
+                }
+
+                if (result.rows.length === 0) {
+                    res.status(404).json({error: "No user found."});
+                    return;
+                }
+
+                const user = result.rows[0];
+
+                // Verify password
+                const passwordMatch = await verifyPassword(userPin, user.pin);
+                if (!passwordMatch) {
+                    res.status(404).json({error: "Invalid password"});
+                    return;
+                }
+                // Validate input
+                if (!userID || !userPin) {
+                    res.status(400).json({error: "Username and password are required."});
+                    return;
+                }
+            });
+    } catch (error) {
+    console.error(error);
+    res.status(500).json({error: "Database error occurred."});
     }
     if (!pin) {
         try {
@@ -199,32 +249,7 @@ const verifyPassword = async (inputPassword: string, storedPassword: string): Pr
     return await bcrypt.compare(inputPassword, storedPassword);
 };
 
-const loginAsUser = (username: string, password: string): boolean => {
-    if (!username || !password) {
-        throw new Error("Username and password are required.");
-    }
-    pool.query("SELECT id, pin FROM users WHERE id = $1", [username]
-        , async (err, result) => {
-            if (err) {
-                console.error(err);
-                throw err;
-            }
 
-            if (result.rows.length === 0) {
-                throw new Error("User not found.")
-            }
-
-            const user = result.rows[0];
-
-            // Verify password
-            const passwordMatch = await verifyPassword(password, user.pin);
-            if (!passwordMatch) {
-                throw new Error("Password is incorrect.")
-            }
-            return true;
-    });
-    return false;
-};
 
 // Function to generate unique IDs for WebSocket clients
 const generateClientId = () => Math.random().toString(36).substring(2, 9);
