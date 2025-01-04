@@ -111,7 +111,7 @@ app.get("/api/users/:user", (req: Request, res: Response):void => {
 app.post("/api/login", (req: Request, res: Response) => {
     const { username, password } = req.body;
     if (!username || !password) {
-        res.status(400).json({ error: "Missing user parameter." });
+        res.status(400).json({ error: "Missing username or password parameter." });
         return;
     }
     pool.query("SELECT id, pin FROM users WHERE id = $1", [username]
@@ -135,6 +135,7 @@ app.post("/api/login", (req: Request, res: Response) => {
                 res.status(404).json({ error: "Invalid password" });
                 return;
             }
+            res.status(200).json({ "user": user, message: `Logged in as ${user}` });
     // Validate input
     if (!username || !password) {
         res.status(400).json({ error: "Username and password are required." });
@@ -185,7 +186,7 @@ app.post("/api/rooms", (req: Request, res: Response) => {
     console.error(error);
     res.status(500).json({error: "Database error occurred."});
     }
-    if (!pin) {
+    if (!pin || pin === "") {
         try {
             client.connect();
             client.query("INSERT INTO Rooms (id, creator) VALUES ($1, $2)", [roomId, userID]);
