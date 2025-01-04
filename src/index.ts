@@ -31,7 +31,7 @@ app.use(
 );
 
 // Helper Functions
-const generateClientId = (): string => uuidv4();
+const generateRandomId = (): string => uuidv4();
 
 const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
     return bcrypt.compare(inputPassword, storedPassword);
@@ -125,7 +125,7 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
 
 app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     const { pin, userID, userPin } = req.body;
-    const roomId = generateClientId();
+    const roomId = generateRandomId();
 
     if (!userID || !userPin) {
         res.status(400).json({ error: "User ID and PIN are required." });
@@ -182,7 +182,7 @@ const httpServer = http.createServer(app);
 const server = new WebSocket.Server({ server: httpServer });
 
 server.on("connection", (socket: ExtendedWebSocket) => {
-    socket.id = generateClientId();
+    socket.id = generateRandomId();
     socket.isAlive = true;
 
     console.log(`Client connected: ${socket.id}`);
