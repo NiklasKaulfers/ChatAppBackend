@@ -161,7 +161,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     }
 });
 
-app.get("api/rooms", async (req: Request, res: Response): Promise<void> => {
+app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     try {
         const rooms = await pool.query("SELECT * FROM rooms");
         const ids: string[] = rooms.rows.map((room) => room.id);
