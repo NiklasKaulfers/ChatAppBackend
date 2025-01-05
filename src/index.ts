@@ -4,6 +4,7 @@ import pg from "pg";
 import express, { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import cors from "cors";
+import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
 
 interface ExtendedWebSocket extends WebSocket {
@@ -11,52 +12,40 @@ interface ExtendedWebSocket extends WebSocket {
     id: string;
 }
 
-// Initialize PostgreSQL Pool
+const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
+const ACCESS_TOKEN_EXPIRY = "1h";
+const REFRESH_TOKEN_EXPIRY = "7d";
+const refreshTokens: Record<string, string> = {};
+
 const pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false,
-    },
+    ssl: { rejectUnauthorized: false },
 });
 
-// Initialize Express app
 const app = express();
 app.use(express.json());
-app.use(
-    cors({
-        origin: "https://niklaskaulfers.github.io",
-        methods: ["GET", "POST", "PUT", "DELETE"],
-        allowedHeaders: ["Authorization", "Content-Type"],
-    })
-);
+app.use(cors({
+    origin: "https://niklaskaulfers.github.io",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Authorization", "Content-Type"],
+}));
 
-// Helper Functions
 const generateRandomId = (): string => uuidv4();
+
+const generateAccessToken = (userId: string): string => {
+    return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+};
+
+const generateRefreshToken = (userId: string): string => {
+    return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
+};
 
 const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
     return bcrypt.compare(inputPassword, storedPassword);
 };
 
-// REST API Endpoints
 app.get("/api/status", (req: Request, res: Response): void => {
     res.json({ status: "Server is running", connectedClients: server.clients.size });
-});
-
-app.post("/api/message", (req: Request, res: Response) => {
-    const { message, user } = req.body;
-
-    if (!message || !user) {
-        res.status(400).json({ error: "Message and user are required." });
-        return;
-    }
-
-    server.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ user, message }));
-        }
-    });
-
-    res.status(200).json({ message: "Message broadcasted to WebSocket clients." });
 });
 
 app.post("/api/users", async (req: Request, res: Response) => {
@@ -71,22 +60,6 @@ app.post("/api/users", async (req: Request, res: Response) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         await pool.query("INSERT INTO users (id, email, pin) VALUES ($1, $2, $3)", [user, email, hashedPassword]);
         res.status(201).json({ message: `User ${user} has been created.` });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Something went wrong with the database." });
-    }
-});
-
-app.get("/api/users/:user", async (req: Request, res: Response): Promise<void> => {
-    const { user } = req.params;
-
-    try {
-        const result = await pool.query("SELECT id, email FROM users WHERE id = $1", [user]);
-        if (result.rows.length > 0) {
-            res.status(200).json({ user: result.rows[0] });
-        } else {
-            res.status(404).json({ error: "User not found." });
-        }
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Database error occurred." });
@@ -116,17 +89,61 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        res.status(200).json({ message: `Logged in as ${username}` });
+        const accessToken = generateAccessToken(user.id);
+        const refreshToken = generateRefreshToken(user.id);
+        refreshTokens[user.id] = refreshToken;
+
+        res.status(200).json({ message: `Logged in as ${username}`, accessToken, refreshToken });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Database error occurred." });
     }
 });
 
-app.post("api/tokenRefresh", async (req: Request, res: Response): Promise<void> => {
-    // TODO: implement
-    res.status(200).json({message: "Token Refresh Endpoint (not implemented yet)." });
-})
+app.post("/api/tokenRefresh", (req: Request, res: Response): void => {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+        res.status(400).json({ error: "Refresh token is required." });
+        return;
+    }
+
+    try {
+        const decoded = jwt.verify(refreshToken, JWT_SECRET) as { id: string };
+        const userId = decoded.id;
+
+        if (refreshTokens[userId] !== refreshToken) {
+            res.status(403).json({ error: "Invalid or expired refresh token." });
+            return;
+        }
+
+        const newAccessToken = generateAccessToken(userId);
+        res.status(200).json({ message: "Token refreshed successfully", accessToken: newAccessToken });
+    } catch (err) {
+        console.error(err);
+        res.status(403).json({ error: "Invalid or expired refresh token." });
+    }
+});
+
+app.post("/api/logout", (req: Request, res: Response): void => {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+        res.status(400).json({ error: "Refresh token is required." });
+        return;
+    }
+
+    try {
+        const decoded = jwt.verify(refreshToken, JWT_SECRET) as { id: string };
+        const userId = decoded.id;
+        delete refreshTokens[userId];
+
+        res.status(200).json({ message: "Logged out successfully." });
+    } catch (err) {
+        console.error(err);
+        res.status(403).json({ error: "Invalid or expired refresh token." });
+    }
+});
 
 app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     const { pin, userID, userPin } = req.body;
@@ -170,18 +187,18 @@ app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     try {
         const rooms = await pool.query("SELECT * FROM rooms");
         const ids: string[] = rooms.rows.map((room) => room.id);
+
         if (!ids.length) {
-            res.status(200).json({ message: "No rooms found.", ids: []  });
+            res.status(200).json({ message: "No rooms found.", ids: [] });
             return;
         }
-        res.status(200).json({ids});
-        return;
+
+        res.status(200).json({ ids });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Database error occurred." });
-        return;
     }
-})
+});
 
 app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
     const { roomId } = req.params;
@@ -199,22 +216,6 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
     }
 });
 
-app.post("/api/rooms/:room", async (req: Request, res: Response): Promise<void> => {
-    const {  roomID  } = req.params;
-    const result = await pool.query("SELECT id, pin, creator FROM Rooms WHERE id = $1", [roomID]);
-    if (result.rows.length === 1) {
-        const pinProtected = result.rows[0].pin === null || result.rows[0].pin === "";
-        res.status(200).json({ room: result.rows[0].id, creator: result.rows[0].creator, pinProtected: pinProtected });
-        return;
-    }
-    if (result.rows.length > 1) {
-        res.status(500).json({ error: "Too many rooms found." });
-        return;
-    }
-    res.status(404).json({error: "No room found"});
-})
-
-// Create HTTP and WebSocket Servers
 const httpServer = http.createServer(app);
 const server = new WebSocket.Server({ server: httpServer });
 
