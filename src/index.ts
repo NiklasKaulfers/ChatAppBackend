@@ -166,10 +166,10 @@ app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
         const rooms = await pool.query("SELECT * FROM rooms");
         const ids: string[] = rooms.rows.map((room) => room.id);
         if (!ids.length) {
-            res.status(200).json({ message: "No rooms found.", ids: "" });
+            res.status(200).json({ message: "No rooms found.", ids: []  });
             return;
         }
-        res.status(200).json({ids: "'" + ids.join("','") + "'"});
+        res.status(200).json({ids});
         return;
     } catch (error) {
         console.error(error);
