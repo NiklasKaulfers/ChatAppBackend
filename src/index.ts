@@ -161,6 +161,24 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     }
 });
 
+app.get("api/rooms", async (req: Request, res: Response): Promise<void> => {
+    try {
+        const rooms = await pool.query("SELECT * FROM rooms");
+        const ids: string[] = rooms.rows.map((room) => room.id);
+        if (!ids.length) {
+            res.status(200).json({ message: "No rooms found.", ids: "" });
+            return;
+        }
+        res.status(200).json({ids: "'" + ids.join("','") + "'"});
+        return;
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Database error occurred." });
+        return;
+    }
+    res.status(500).json({ error: "Internal server error." });
+})
+
 app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
     const { roomId } = req.params;
 
