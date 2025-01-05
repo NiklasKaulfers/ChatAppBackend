@@ -123,6 +123,11 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
     }
 });
 
+app.post("api/tokenRefresh", async (req: Request, res: Response): Promise<void> => {
+    // TODO: implement
+    res.status(200).json({message: "Token Refresh Endpoint (not implemented yet)." });
+})
+
 app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     const { pin, userID, userPin } = req.body;
     const roomId = generateRandomId();
@@ -176,7 +181,6 @@ app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
         res.status(500).json({ error: "Database error occurred." });
         return;
     }
-    res.status(500).json({ error: "Internal server error." });
 })
 
 app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
@@ -194,6 +198,21 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
         res.status(500).json({ error: "Database error occurred." });
     }
 });
+
+app.post("/api/rooms/:room", async (req: Request, res: Response): Promise<void> => {
+    const {  roomID  } = req.params;
+    const result = await pool.query("SELECT id, pin, creator FROM Rooms WHERE id = $1", [roomID]);
+    if (result.rows.length === 1) {
+        const pinProtected = result.rows[0].pin === null || result.rows[0].pin === "";
+        res.status(200).json({ room: result.rows[0].id, creator: result.rows[0].creator, pinProtected: pinProtected });
+        return;
+    }
+    if (result.rows.length > 1) {
+        res.status(500).json({ error: "Too many rooms found." });
+        return;
+    }
+    res.status(404).json({error: "No room found"});
+})
 
 // Create HTTP and WebSocket Servers
 const httpServer = http.createServer(app);
