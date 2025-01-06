@@ -187,15 +187,16 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 
 app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     try {
-        const rooms = await pool.query("SELECT * FROM rooms");
-        const ids: string[] = rooms.rows.map((room) => room.id);
+        const rooms = await pool.query(
+            "Select id,creator, case when pin is null then 'False' else 'True' end as has_password from rooms"
+        );
 
-        if (!ids.length) {
+        if (!rooms) {
             res.status(200).json({ message: "No rooms found.", ids: [] });
             return;
         }
 
-        res.status(200).json({ ids });
+        res.status(200).json({ ids: rooms });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Database error occurred." });
