@@ -196,7 +196,7 @@ app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        res.status(200).json({ ids: rooms });
+        res.status(200).json({ ids: rooms.rows });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Database error occurred." });
