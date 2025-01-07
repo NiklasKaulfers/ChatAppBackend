@@ -49,6 +49,10 @@ app.get("/api/status", (req: Request, res: Response): void => {
     res.json({ status: "Server is running", connectedClients: server.clients.size });
 });
 
+
+//users
+
+
 app.post("/api/users", async (req: Request, res: Response) => {
     const { user, email, password } = req.body;
 
@@ -66,6 +70,8 @@ app.post("/api/users", async (req: Request, res: Response) => {
         res.status(500).json({ error: "Database error occurred." });
     }
 });
+
+//login
 
 app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
     const { username, password } = req.body;
@@ -100,6 +106,9 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
         res.status(500).json({ error: "Database error occurred." });
     }
 });
+
+// token
+
 
 app.post("/api/tokenRefresh", (req: Request, res: Response): void => {
     const { refreshToken } = req.body;
@@ -146,38 +155,52 @@ app.post("/api/logout", (req: Request, res: Response): void => {
     }
 });
 
+// rooms
+
+
 app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
-    const { pin, display_name ,userID, userPin } = req.body;
+    const { pin, display_name, userID } = req.body;
     const roomId = generateRandomId();
 
-    if (!userID || !userPin) {
-        res.status(400).json({ error: "User ID and PIN are required." });
+    if (!userID ) {
+        res.status(400).json({ error: "User ID is required." });
         return;
     }
 
     try {
-        const userResult = await pool.query("SELECT id, pin FROM users WHERE id = $1", [userID]);
-        if (userResult.rows.length === 0) {
-            res.status(404).json({ error: "User not found." });
+        const token = req.headers["authorization"]?.split(" ")[1]; // Assuming token is in the format "Bearer <token>"
+
+        if (!token) {
+            res.status(400).json({ error: "Authorization token is required." });
             return;
         }
 
-        const user = userResult.rows[0];
-        const passwordMatch = await verifyPassword(userPin, user.pin);
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET) as { id: string }; // This decodes the token and extracts the user ID
+            const userId = decoded.id;
 
-        if (!passwordMatch) {
-            res.status(403).json({ error: "Invalid user credentials." });
-            return;
+
+            const userResult = await pool.query("SELECT id FROM users WHERE id = $1", [userId]);
+            if (userResult.rows.length === 0) {
+                res.status(404).json({ error: "User not found." });
+                return;
+            }
+
+            if (!pin) {
+                await pool.query("INSERT INTO Rooms (id, display_name, creator) VALUES ($1, $3, $2)"
+                    , [roomId, display_name, userId]);
+            } else {
+                const hashedPassword = await bcrypt.hash(pin, 10);
+                await pool.query("INSERT INTO Rooms (id, display_name, pin, creator) VALUES ($1, $2, $3, $4)"
+                    , [roomId, display_name, hashedPassword, userId]);
+            }
+
+            res.status(201).json({ message: `Room ${roomId} created with display name ${display_name}.` });
+
+        } catch (err) {
+            console.error(err);
+            res.status(403).json({ error: "Invalid or expired token." });
         }
-
-        if (!pin) {
-            await pool.query("INSERT INTO Rooms (id, display_name,creator) VALUES ($1, $3, $2)", [roomId, display_name, userID]);
-        } else {
-            const hashedPassword = await bcrypt.hash(pin, 10);
-            await pool.query("INSERT INTO Rooms (id, display_name, pin, creator) VALUES ($1, $2, $3, $4)", [roomId, display_name,hashedPassword, userID]);
-        }
-
-        res.status(201).json({ message: `Room ${roomId} created with display name ${display_name}.`});
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Internal server error." });
@@ -217,6 +240,9 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
         res.status(500).json({ error: "Database error occurred." });
     }
 });
+
+
+// server
 
 const httpServer = http.createServer(app);
 const server = new WebSocket.Server({ server: httpServer });
