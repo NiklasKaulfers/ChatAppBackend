@@ -12,7 +12,10 @@ interface ExtendedWebSocket extends WebSocket {
     id: string;
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (JWT_SECRET === undefined){
+    throw new Error("no jwt secret")
+}
 const ACCESS_TOKEN_EXPIRY = "1h";
 const REFRESH_TOKEN_EXPIRY = "7d";
 const refreshTokens: Record<string, string> = {};
