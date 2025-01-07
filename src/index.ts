@@ -168,15 +168,15 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     }
 
     try {
-        const token = req.headers["authorization"]?.split(" ")[1]; // Assuming token is in the format "Bearer <token>"
+        const token = req.headers["authorization"]?.split(" ")[1];
 
         if (!token) {
-            res.status(400).json({ error: "Authorization token is required." });
+            res.status(400).json({ error: "Authorization token is required." })
             return;
         }
 
         try {
-            const decoded = jwt.verify(token, JWT_SECRET) as { id: string }; // This decodes the token and extracts the user ID
+            const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
             const userId = decoded.id;
 
 
