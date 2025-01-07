@@ -148,7 +148,7 @@ app.post("/api/logout", (req: Request, res: Response): void => {
 });
 
 app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
-    const { pin, userID, userPin } = req.body;
+    const { pin, display_name ,userID, userPin } = req.body;
     const roomId = generateRandomId();
 
     if (!userID || !userPin) {
@@ -172,10 +172,10 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
         }
 
         if (!pin) {
-            await pool.query("INSERT INTO Rooms (id, creator) VALUES ($1, $2)", [roomId, userID]);
+            await pool.query("INSERT INTO Rooms (id, display_name,creator) VALUES ($1, $3, $2)", [roomId, display_name, userID]);
         } else {
             const hashedPassword = await bcrypt.hash(pin, 10);
-            await pool.query("INSERT INTO Rooms (id, pin, creator) VALUES ($1, $2, $3)", [roomId, hashedPassword, userID]);
+            await pool.query("INSERT INTO Rooms (id, display_name, pin, creator) VALUES ($1, $2, $3, $4)", [roomId, display_name,hashedPassword, userID]);
         }
 
         res.status(201).json({ message: "Room created successfully", roomId });
@@ -188,7 +188,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     try {
         const rooms = await pool.query(
-            "Select id,creator, case when pin is null then 'False' else 'True' end as has_password from rooms"
+            "Select id,display_name, creator, case when pin is null then 'False' else 'True' end as has_password from rooms"
         );
 
         if (!rooms) {
@@ -196,7 +196,7 @@ app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        res.status(200).json({ ids: rooms.rows });
+        res.status(200).json({ rooms: rooms.rows });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Database error occurred." });
