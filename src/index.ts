@@ -178,7 +178,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
             await pool.query("INSERT INTO Rooms (id, display_name, pin, creator) VALUES ($1, $2, $3, $4)", [roomId, display_name,hashedPassword, userID]);
         }
 
-        res.status(201).json({ message: "Room created successfully", roomId });
+        res.status(201).json({ message: `Room ${roomId} created with display name ${display_name}.`});
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Internal server error." });
