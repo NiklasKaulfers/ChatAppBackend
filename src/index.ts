@@ -163,13 +163,9 @@ app.post("/api/logout", (req: Request, res: Response): void => {
 
 
 app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
-    const { pin, display_name, userID } = req.body;
+    const { pin, display_name } = req.body;
     const roomId = generateRandomId();
 
-    if (!userID ) {
-        res.status(400).json({ error: "User ID is required." });
-        return;
-    }
 
     try {
         const token = req.headers["authorization"]?.split(" ")[1];
