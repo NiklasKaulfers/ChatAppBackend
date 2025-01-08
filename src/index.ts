@@ -194,7 +194,6 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 
 
             const userResult = await pool.query("SELECT id FROM users WHERE id = $1", [userId]);
-            console.log(userResult);
             if (userResult.rows.length === 0) {
                 res.status(404).json({ error: "User not found." });
                 return;
@@ -211,15 +210,15 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
                     , [roomId, display_name, hashedPassword, userId]);
             }
 
-            res.status(201).json({ message: `Room ${roomId} created with display name ${display_name}.` });
+            res.status(201).json({message: `Room ${roomId} created with display name ${display_name}.`});
 
         } catch (err) {
             console.error(err);
-            res.status(403).json({ error: "Invalid or expired token." });
+            res.status(403).json({error: "Invalid or expired token."});
         }
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: "Internal server error." });
+        res.status(500).json({error: "Internal server error."});
     }
 });
 
