@@ -13,7 +13,7 @@ interface ExtendedWebSocket extends WebSocket {
 }
 
 let JWT_SECRET = process.env.JWT_SECRET;
-if (JWT_SECRET === undefined){
+if (!JWT_SECRET || !process.env.DATABASE_URL){
     console.error("JWT Secret Key Mssing")
     throw new Error("JWT Secret Key missing");
 }
@@ -51,6 +51,15 @@ const generateRefreshToken = (userId: string): string => {
 const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
     return bcrypt.compare(inputPassword, storedPassword);
 };
+/*
+
+
+            API Endpoint
+
+
+ */
+
+
 
 app.get("/api/status", (req: Request, res: Response): void => {
     res.json({ status: "Server is running", connectedClients: server.clients.size });
@@ -180,15 +189,17 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
         }
 
         try {
-            console.log("received token " + token)
             const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
-            const userId = decoded.id;
+            let userId = decoded.id;
 
 
             const userResult = await pool.query("SELECT id FROM users WHERE id = $1", [userId]);
+            console.log(userResult);
             if (userResult.rows.length === 0) {
                 res.status(404).json({ error: "User not found." });
                 return;
+            } else {
+                userId = userResult.rows[0].id;
             }
 
             if (!pin) {
