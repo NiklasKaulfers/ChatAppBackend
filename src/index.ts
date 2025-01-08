@@ -203,7 +203,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
             }
 
             if (!pin) {
-                await pool.query("INSERT INTO Rooms (id, display_name, creator) VALUES ($1, $3, $2)"
+                await pool.query("INSERT INTO Rooms (id, display_name, creator) VALUES ($1, $2, $3)"
                     , [roomId, display_name, userId]);
             } else {
                 const hashedPassword = await bcrypt.hash(pin, 10);
