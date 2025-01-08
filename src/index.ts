@@ -12,7 +12,7 @@ interface ExtendedWebSocket extends WebSocket {
     id: string;
 }
 
-let JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET || !process.env.DATABASE_URL){
     console.error("JWT Secret Key Mssing")
     throw new Error("JWT Secret Key missing");
@@ -221,6 +221,14 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
         res.status(500).json({error: "Internal server error."});
     }
 });
+
+app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
+    const pin: string | null = req.body.pin;
+    if (!req.headers.authorization){
+        res.status(403).json({error: "Missing Authorization"});
+    }
+
+})
 
 app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     try {
