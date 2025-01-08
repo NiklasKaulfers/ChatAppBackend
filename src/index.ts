@@ -12,13 +12,15 @@ interface ExtendedWebSocket extends WebSocket {
     id: string;
 }
 
+const ROOM_SECRET_KEY = process.env.ROOM_SECRET_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET || !process.env.DATABASE_URL){
-    console.error("JWT Secret Key Mssing")
-    throw new Error("JWT Secret Key missing");
+if (!JWT_SECRET || !process.env.DATABASE_URL || !ROOM_SECRET_KEY){
+    console.error("At least 1 missing secret")
+    throw new Error("Secrets are missing.");
 }
-const ACCESS_TOKEN_EXPIRY = "1h";
+const ACCESS_TOKEN_EXPIRY = "2h";
 const REFRESH_TOKEN_EXPIRY = "7d";
+const ROOM_SECRET_EXPIRY = "2h";
 const refreshTokens: Record<string, string> = {};
 
 const pool = new pg.Pool({
@@ -51,10 +53,12 @@ const generateRefreshToken = (userId: string): string => {
 const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
     return bcrypt.compare(inputPassword, storedPassword);
 };
+
+
 /*
 
 
-            API Endpoint
+            API Endpoints
 
 
  */
@@ -125,7 +129,6 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
 });
 
 // token
-
 
 app.post("/api/tokenRefresh", (req: Request, res: Response): void => {
     const { refreshToken } = req.body;
@@ -224,10 +227,58 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 
 app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
     const pin: string | null = req.body.pin;
+    let room ;
     if (!req.headers.authorization){
-        res.status(403).json({error: "Missing Authorization"});
+        res.status(403).json({error: "Authorization missing."});
+        return;
+    }
+    const { roomId } = req.params;
+
+    try {
+        const result = await pool.query("Select id, pin, creator from Rooms WHERE id = $1", [roomId]);
+        if (result.rows.length === 0){
+            res.status(404).json({error: "Room not found."});
+            return;
+        }
+        room = result.rows[0];
+    } catch (err) {
+        res.status(500).json({error: "Database error."})
+        return;
     }
 
+    const userConfirm = jwt.verify(req.headers.authorization, JWT_SECRET) as {userId: string};
+
+    if (!userConfirm){
+        res.status(403).json({error: "Invalid jwt token."});
+        return
+    }
+
+
+    const roomToken = jwt.sign({roomId: roomId, userId: userConfirm}, ROOM_SECRET_KEY, {expiresIn: ROOM_SECRET_EXPIRY});
+
+    if (room.pin === null){
+        res.status(200).json({
+            message: "Joined room: " + roomId,
+            roomToken: roomToken
+        })
+        return;
+    }
+
+    if (pin === null){
+        res.status(403).json("This room is pin protected, provide a pin.");
+        return;
+    }
+
+    const roomPin = await bcrypt.compare(pin, room.pin);
+    if (!roomPin){
+        res.status(403).json({error: "Invalid Password"});
+        return;
+    }
+    res.status(200).json({
+        message: "Joined room: " + roomId,
+        roomToken: roomToken
+    })
+    return;
 })
 
 app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
