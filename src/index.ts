@@ -81,7 +81,8 @@ app.post("/api/users", async (req: Request, res: Response) => {
 //login
 
 app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
-    const { username, password } = req.body;
+    const username = req.body.username;
+    const password = req.body.password;
 
     if (!username || !password) {
         res.status(400).json({ error: "Username and password are required." });
@@ -107,7 +108,7 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
         const refreshToken = generateRefreshToken(user.id);
         refreshTokens[user.id] = refreshToken;
 
-        res.status(200).json({ message: `Logged in as ${username}`, accessToken, refreshToken });
+        res.status(200).json({ message: `Logged in as ${username}`, accessToken: accessToken, refreshToken: refreshToken });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Database error occurred." });
