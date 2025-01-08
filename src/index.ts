@@ -176,6 +176,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
         }
 
         try {
+            console.log("received token " + token)
             const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
             const userId = decoded.id;
 
