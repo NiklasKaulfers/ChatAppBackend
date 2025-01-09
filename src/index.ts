@@ -303,7 +303,7 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
     const { roomId } = req.params;
 
     try {
-        const result = await pool.query("SELECT id, pin, creator FROM Rooms WHERE id = $1", [roomId]);
+        const result = await pool.query("SELECT id, display_name, creator FROM Rooms WHERE id = $1", [roomId]);
         if (result.rows.length > 0) {
             res.status(200).json({ room: result.rows[0] });
         } else {
