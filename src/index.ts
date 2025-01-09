@@ -259,7 +259,7 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
 
     const roomToken = jwt.sign({roomId: roomId, userId: userConfirm}, ROOM_SECRET_KEY, {expiresIn: ROOM_SECRET_EXPIRY});
 
-    if (room.pin === null){
+    if (room.pin === null || room.pin === ""){
         res.status(200).json({
             message: "Joined room: " + roomId,
             roomToken: roomToken
