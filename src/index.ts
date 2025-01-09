@@ -31,14 +31,14 @@ const pool = new pg.Pool({
 const app = express();
 app.use(express.json());
 app.use(cors({
-    origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com"],
+    origin: "https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com",
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Authorization", "Content-Type"],
     optionsSuccessStatus: 200,
 }));
 
 
-app.options("*", cors());
+//app.options("*", cors());
 
 const generateRandomId = (): string => uuidv4();
 
@@ -306,7 +306,7 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
     const { roomId } = req.params;
 
     try {
-        const result = await pool.query("SELECT id, pin, creator FROM Rooms WHERE id = $1", [roomId]);
+        const result = await pool.query("SELECT id, display_name, creator FROM Rooms WHERE id = $1", [roomId]);
         if (result.rows.length > 0) {
             res.status(200).json({ room: result.rows[0] });
         } else {
