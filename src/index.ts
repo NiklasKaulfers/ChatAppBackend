@@ -255,7 +255,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
     console.log("Trying to log into room.");
     const pin: string | null = req.body.pin;
-    const auth: string| undefined = req.headers.authorization;
+    const auth: string| undefined = req.headers.authorization?.split(" ")[1];
     let room ;
     console.log("Checking auth.")
     if (!auth){
@@ -285,10 +285,11 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
     }
 
     console.log("Checking auth.");
-    let userConfirm: {userId: string};
+    let userConfirm: {id: string};
     try {
-        userConfirm = jwt.verify(auth, JWT_SECRET) as { userId: string };
+        userConfirm = jwt.verify(auth, JWT_SECRET) as { id: string };
     } catch (err){
+        console.error("Caught error with jwt verify.")
         res.status(500).json({error: "Error verifying"});
         return ;
     }
@@ -297,7 +298,7 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
         return;
     }
     console.log("Creating key.")
-    const roomToken = jwt.sign({roomId: roomId, userId: userConfirm}
+    const roomToken = jwt.sign({roomId: roomId, userId: userConfirm.id}
         , ROOM_SECRET_KEY
         , {expiresIn: ROOM_SECRET_EXPIRY});
     console.log("Checking if pin is needed.")
