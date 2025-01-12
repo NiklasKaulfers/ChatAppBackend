@@ -50,7 +50,7 @@ app.use(express.json());
 app.use(cors({
     origin: "https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com",
     methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Authorization", "Content-Type"],
+    allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
     credentials: true,
     optionsSuccessStatus: 200,
 }));
@@ -202,7 +202,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 
 
     try {
-        const token: string | null = req.headers.authorization?.split(" ")[1];
+        const token: string | undefined = req.headers.authorization?.split(" ")[1];
 
         if (!token) {
             res.status(400).json({ error: "Authorization token is required." })
