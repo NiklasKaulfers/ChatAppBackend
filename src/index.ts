@@ -8,6 +8,7 @@ import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
 import { Amplify } from 'aws-amplify';
 import { events } from 'aws-amplify/data';
+import {checkValidCharsForDB} from "./check-valid-chars-for-db";
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
@@ -220,6 +221,15 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
                 userId = userResult.rows[0].id;
             }
 
+            const allCharactersValid = checkValidCharsForDB(userId)
+                && checkValidCharsForDB(display_name)
+                && checkValidCharsForDB(roomId);
+            if (!allCharactersValid) {
+                res.status(403).json({ error: "Uses invalid characters." });
+                return;
+            }
+
+
             if (!pin) {
                 await pool.query("INSERT INTO Rooms (id, display_name, creator) VALUES ($1, $2, $3)"
                     , [roomId, display_name, userId]);
@@ -249,6 +259,11 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
         return;
     }
     const { roomId } = req.params;
+
+    if (!checkValidCharsForDB(roomId)) {
+        res.status(403).json({ error: "Invalid or expired chars." });
+        return;
+    }
 
     try {
         const result =
@@ -320,7 +335,11 @@ app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 
 app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
     const { roomId } = req.params;
-
+    const checkForDbManipulation = checkValidCharsForDB(roomId);
+    if (!checkForDbManipulation){
+        res.status(403).json({error: "Invalid or expired chars."});
+        return;
+    }
     try {
         const result =
             await pool.query("SELECT id, display_name, creator FROM Rooms WHERE id = $1"
