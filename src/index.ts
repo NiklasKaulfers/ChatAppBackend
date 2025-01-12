@@ -6,18 +6,34 @@ import bcrypt from "bcryptjs";
 import cors from "cors";
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
+import { Amplify } from 'aws-amplify';
+import { events } from 'aws-amplify/data';
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
     id: string;
 }
 
+
 const ROOM_SECRET_KEY = process.env.ROOM_SECRET_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET || !process.env.DATABASE_URL || !ROOM_SECRET_KEY){
+if (!JWT_SECRET || !process.env.DATABASE_URL || !ROOM_SECRET_KEY || !process.env.AWS_ENDPOINT || !process.env.AWS_API_KEY) {
     console.error("At least 1 missing secret")
     throw new Error("Secrets are missing.");
 }
+
+// Amplify for AWS Appsync
+Amplify.configure({
+    "API": {
+        "Events": {
+            "endpoint": process.env.AWS_ENDPOINT,
+            "region": "eu-central-1",
+            "defaultAuthMode": "apiKey",
+            "apiKey": process.env.AWS_API_KEY,
+        }
+    }
+});
+
 const ACCESS_TOKEN_EXPIRY = "2h";
 const REFRESH_TOKEN_EXPIRY = "7d";
 const ROOM_SECRET_EXPIRY = "2h";
@@ -235,7 +251,8 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
     const { roomId } = req.params;
 
     try {
-        const result = await pool.query("Select id, pin, creator from Rooms WHERE id = $1", [roomId]);
+        const result =
+            await pool.query("Select id, pin, creator from Rooms WHERE id = $1", [roomId]);
         if (result.rows.length === 0){
             res.status(404).json({error: "Room not found."});
             return;
@@ -254,7 +271,9 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
     }
 
 
-    const roomToken = jwt.sign({roomId: roomId, userId: userConfirm}, ROOM_SECRET_KEY, {expiresIn: ROOM_SECRET_EXPIRY});
+    const roomToken = jwt.sign({roomId: roomId, userId: userConfirm}
+        , ROOM_SECRET_KEY
+        , {expiresIn: ROOM_SECRET_EXPIRY});
 
     if (room.pin === null){
         res.status(200).json({
@@ -303,7 +322,9 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
     const { roomId } = req.params;
 
     try {
-        const result = await pool.query("SELECT id, display_name, creator FROM Rooms WHERE id = $1", [roomId]);
+        const result =
+            await pool.query("SELECT id, display_name, creator FROM Rooms WHERE id = $1"
+                , [roomId]);
         if (result.rows.length > 0) {
             res.status(200).json({ room: result.rows[0] });
         } else {
@@ -316,8 +337,44 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
 });
 
 
+app.post("/api/messages", async (req: Request, res: Response): Promise<void> => {
+    const message = req.body.message;
+
+    if (!message){
+        res.status(400).json({error: "Missing a message."});
+        return;
+    }
+
+    if (!req.headers.authorization){
+        res.status(403).json({error: "Authorization missing."});
+        return;
+    }
+
+    const verify  =
+        jwt.verify(req.headers.authorization, JWT_SECRET) as {userId: string, roomId: string};
+
+    if (!verify){
+        res.status(403).json({error: "Invalid verify token."});
+        return;
+    }
+
+    const sender: string = verify.userId;
+    const room: string = verify.roomId;
+
+    const sendMessage =
+        await  events.post("/default/" + room, {message: message, sender: sender});
+    if (!sendMessage){
+        res.status(500).json({error: "Could not post message to aws."});
+        return;
+    }
+    res.status(200).json({message: "Message sent."});
+})
+
+
 // server
 
+
+// todo: remove if aws works properly
 const httpServer = http.createServer(app);
 const server = new WebSocket.Server({ server: httpServer });
 
