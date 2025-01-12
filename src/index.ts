@@ -201,7 +201,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 
 
     try {
-        const token = req.headers["authorization"]?.split(" ")[1];
+        const token = req.headers.authorization?.split(" ")[1];
 
         if (!token) {
             res.status(400).json({ error: "Authorization token is required." })
