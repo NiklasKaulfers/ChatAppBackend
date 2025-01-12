@@ -201,7 +201,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 
 
     try {
-        const token = req.headers.authorization?.split(" ")[1];
+        const token: string | null = req.headers.authorization?.split(" ")[1];
 
         if (!token) {
             res.status(400).json({ error: "Authorization token is required." })
@@ -252,19 +252,23 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 });
 
 app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
+    console.log("Trying to log into room.");
     const pin: string | null = req.body.pin;
     let room ;
+    console.log("Checking auth.")
     if (!req.headers.authorization){
         res.status(403).json({error: "Authorization missing."});
         return;
     }
     const { roomId } = req.params;
 
+    console.log("Checking if ID can be used for db.")
     if (!checkValidCharsForDB(roomId)) {
         res.status(403).json({ error: "Invalid or expired chars." });
         return;
     }
 
+    console.log("Querying db.")
     try {
         const result =
             await pool.query("Select id, pin, creator from Rooms WHERE id = $1", [roomId]);
@@ -278,6 +282,7 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
         return;
     }
 
+    console.log("Checking auth.");
     const userConfirm = jwt.verify(req.headers.authorization, JWT_SECRET) as {userId: string};
 
     if (!userConfirm){
@@ -285,29 +290,31 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
         return
     }
 
-
+    console.log("Creating key.")
     const roomToken = jwt.sign({roomId: roomId, userId: userConfirm}
         , ROOM_SECRET_KEY
         , {expiresIn: ROOM_SECRET_EXPIRY});
-
+    console.log("Checking if pin is needed.")
     if (room.pin === null){
+        console.log("Success.")
         res.status(200).json({
             message: "Joined room: " + roomId,
             roomToken: roomToken
         })
         return;
     }
-
+    console.log("Requiring pin.")
     if (pin === null){
         res.status(403).json("This room is pin protected, provide a pin.");
         return;
     }
-
+    console.log("Checking with db if its the right key.")
     const roomPin = await bcrypt.compare(pin, room.pin);
     if (!roomPin){
         res.status(403).json({error: "Invalid Password"});
         return;
     }
+    console.log("Success.")
     res.status(200).json({
         message: "Joined room: " + roomId,
         roomToken: roomToken
