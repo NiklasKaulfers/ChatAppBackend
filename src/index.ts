@@ -255,9 +255,10 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
     console.log("Trying to log into room.");
     const pin: string | null = req.body.pin;
+    const auth: string| undefined = req.headers.authorization;
     let room ;
     console.log("Checking auth.")
-    if (!req.headers.authorization){
+    if (!auth){
         res.status(403).json({error: "Authorization missing."});
         return;
     }
@@ -284,13 +285,17 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
     }
 
     console.log("Checking auth.");
-    const userConfirm = jwt.verify(req.headers.authorization, JWT_SECRET) as {userId: string};
-
+    let userConfirm: {userId: string};
+    try {
+        userConfirm = jwt.verify(auth, JWT_SECRET) as { userId: string };
+    } catch (err){
+        res.status(500).json({error: "Error verifying"});
+        return ;
+    }
     if (!userConfirm){
         res.status(403).json({error: "Invalid jwt token."});
-        return
+        return;
     }
-
     console.log("Creating key.")
     const roomToken = jwt.sign({roomId: roomId, userId: userConfirm}
         , ROOM_SECRET_KEY
