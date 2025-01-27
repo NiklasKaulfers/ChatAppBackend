@@ -9,12 +9,12 @@ import { v4 as uuidv4 } from "uuid";
 import { Amplify } from 'aws-amplify';
 import { events } from 'aws-amplify/data';
 import {checkValidCharsForDB} from "./check-valid-chars-for-db";
+import { getAuthProtocol } from "./encrypt"
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
     id: string;
 }
-
 
 const ROOM_SECRET_KEY = process.env.ROOM_SECRET_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -329,6 +329,7 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
     return;
 })
 
+
 app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     try {
         const rooms = await pool.query(
@@ -403,6 +404,40 @@ app.post("/api/messages", async (req: Request, res: Response): Promise<void> => 
     res.status(200).json({message: "Message sent."});
 })
 
+
+// cors policy for restrictive access
+// for api key security limiting time on api key on aws side
+app.get("api/chatKey", async (req: Request, res: Response): Promise<void> => {
+    if (!req.headers.authorization) {
+        res.status(403).json({error: "Authorization missing."});
+        return;
+    }
+    const auth: string = req.headers.authorization?.toString().split(" ")[1];
+
+
+    // currently would work with both kind of keys due to shared secret
+    const verify = jwt.verify(auth, JWT_SECRET) as {id: string};
+
+    if (!verify){
+        res.status(403).json({error: "Invalid verify token."});
+        return;
+    }
+
+    if (verify){
+        if (!process.env.AWS_API_KEY){
+            res.status(403).json({error: "Invalid AWS_API_KEY."});
+            return;
+        }
+        const encodeApiKey = getAuthProtocol(process.env.AWS_API_KEY);
+        res.status(200).json({
+            auth: encodeApiKey,
+            //Todo: impl of process aws_realtime_endpoint as env secret
+            ws: process.env.AWS_REALTIME_ENDPOINT
+        });
+        return;
+    }
+    res.status(503).json({error: "Issue with verification."});
+})
 
 // server
 
