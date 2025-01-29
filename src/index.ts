@@ -18,7 +18,7 @@ interface ExtendedWebSocket extends WebSocket {
 const ROOM_SECRET_KEY = process.env.ROOM_SECRET_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 const HANDSHAKE_KEY = process.env.HANDSHAKE_KEY;
-if (!JWT_SECRET || !process.env.DATABASE_URL || !ROOM_SECRET_KEY || !process.env.AWS_ENDPOINT || !process.env.AWS_API_KEY || HANDSHAKE_KEY) {
+if (!JWT_SECRET || !process.env.DATABASE_URL || !ROOM_SECRET_KEY || !process.env.AWS_ENDPOINT || !process.env.AWS_API_KEY || !HANDSHAKE_KEY) {
     console.error("At least 1 missing secret")
     throw new Error("Secrets are missing.");
 }
@@ -387,13 +387,9 @@ app.get("/api/handshakeKey", async (req: Request, res: Response): Promise<void> 
         res.status(403).json({error: "Invalid token."})
         return;
     }
-    if (!HANDSHAKE_KEY){
-        res.status(500).json({error: "Handshake is not updated."})
-        return;
-    }
     if (verify.id){
         const formatedHandshake = getAuthProtocol(HANDSHAKE_KEY);
-        res.status(200).json({handshake: HANDSHAKE_KEY});
+        res.status(200).json({handshake: formatedHandshake});
         return
     }
     res.status(500).json({error: "Can not handle request properly."})
