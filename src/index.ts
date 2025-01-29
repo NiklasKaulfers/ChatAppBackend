@@ -1,15 +1,14 @@
 import * as WebSocket from "ws";
-import * as http from "http";
 import pg from "pg";
 import express, { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import cors from "cors";
 import jwt from "jsonwebtoken";
-import { v4 as uuidv4 } from "uuid";
+import { v4 as uuidV4 } from "uuid";
 import { Amplify } from 'aws-amplify';
 import { events } from 'aws-amplify/data';
 import {checkValidCharsForDB} from "./check-valid-chars-for-db";
-import { getAuthProtocol } from "./encrypt"
+import {getAuthProtocol} from "./encrypt";
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
@@ -18,7 +17,8 @@ interface ExtendedWebSocket extends WebSocket {
 
 const ROOM_SECRET_KEY = process.env.ROOM_SECRET_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET || !process.env.DATABASE_URL || !ROOM_SECRET_KEY || !process.env.AWS_ENDPOINT || !process.env.AWS_API_KEY) {
+const HANDSHAKE_KEY = process.env.HANDSHAKE_KEY;
+if (!JWT_SECRET || !process.env.DATABASE_URL || !ROOM_SECRET_KEY || !process.env.AWS_ENDPOINT || !process.env.AWS_API_KEY || HANDSHAKE_KEY) {
     console.error("At least 1 missing secret")
     throw new Error("Secrets are missing.");
 }
@@ -38,6 +38,7 @@ Amplify.configure({
 const ACCESS_TOKEN_EXPIRY = "2h";
 const REFRESH_TOKEN_EXPIRY = "7d";
 const ROOM_SECRET_EXPIRY = "2h";
+// todo: this bad bad, add to db eventually
 const refreshTokens: Record<string, string> = {};
 
 const pool = new pg.Pool({
@@ -58,7 +59,7 @@ app.use(cors({
 
 app.options("*", cors());
 
-const generateRandomId = (): string => uuidv4();
+const generateRandomId = (): string => uuidV4();
 
 const generateAccessToken = (userId: string): string => {
     return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
@@ -284,7 +285,7 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
         return;
     }
 
-    console.log("Checking auth.");
+    //Checking auth.
     let userConfirm: {id: string};
     try {
         userConfirm = jwt.verify(auth, JWT_SECRET) as { id: string };
@@ -297,11 +298,11 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
         res.status(403).json({error: "Invalid jwt token."});
         return;
     }
-    console.log("Creating key.")
+    //Creating key.
     const roomToken = jwt.sign({roomId: roomId, userId: userConfirm.id}
         , ROOM_SECRET_KEY
         , {expiresIn: ROOM_SECRET_EXPIRY});
-    console.log("Checking if pin is needed.")
+    //Checking if pin is needed.
     if (room.pin === null){
         console.log("Success.")
         res.status(200).json({
@@ -310,18 +311,18 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
         })
         return;
     }
-    console.log("Requiring pin.")
+    //Requiring pin.
     if (pin === null){
         res.status(403).json("This room is pin protected, provide a pin.");
         return;
     }
-    console.log("Checking with db if its the right key.")
+    //Checking with db if its the right key.
     const roomPin = await bcrypt.compare(pin, room.pin);
     if (!roomPin){
         res.status(403).json({error: "Invalid Password"});
         return;
     }
-    console.log("Success.")
+    //Success.
     res.status(200).json({
         message: "Joined room: " + roomId,
         roomToken: roomToken
@@ -368,7 +369,36 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
         console.error(err);
         res.status(500).json({ error: "Database error occurred." });
     }
-});
+})
+
+
+// todo: impl with cognito and lambda but w.e
+// use restricted api key -> for handshake only
+app.get("/api/handshakeKey", async (req: Request, res: Response): Promise<void> => {
+    const auth : string | undefined = req.headers.authorization?.split(" ")[1];
+    if (!auth){
+        res.status(403).json({error: "Authorization missing."})
+        return ;
+    }
+    let verify;
+    try {
+        verify = jwt.verify(auth, JWT_SECRET) as {id: string};
+    }catch (e) {
+        res.status(403).json({error: "Invalid token."})
+        return;
+    }
+    if (!HANDSHAKE_KEY){
+        res.status(500).json({error: "Handshake is not updated."})
+        return;
+    }
+    if (verify.id){
+        const formatedHandshake = getAuthProtocol(HANDSHAKE_KEY);
+        res.status(200).json({handshake: HANDSHAKE_KEY});
+        return
+    }
+    res.status(500).json({error: "Can not handle request properly."})
+    return ;
+})
 
 
 app.post("/api/messages", async (req: Request, res: Response): Promise<void> => {
@@ -405,46 +435,10 @@ app.post("/api/messages", async (req: Request, res: Response): Promise<void> => 
 })
 
 
-// cors policy for restrictive access
-// for api key security limiting time on api key on aws side
-app.get("api/chatKey", async (req: Request, res: Response): Promise<void> => {
-    if (!req.headers.authorization) {
-        res.status(403).json({error: "Authorization missing."});
-        return;
-    }
-    const auth: string = req.headers.authorization?.toString().split(" ")[1];
-
-
-    // currently would work with both kind of keys due to shared secret
-    const verify = jwt.verify(auth, JWT_SECRET) as {id: string};
-
-    if (!verify){
-        res.status(403).json({error: "Invalid verify token."});
-        return;
-    }
-
-    if (verify){
-        if (!process.env.AWS_API_KEY){
-            res.status(403).json({error: "Invalid AWS_API_KEY."});
-            return;
-        }
-        const encodeApiKey = getAuthProtocol(process.env.AWS_API_KEY);
-        res.status(200).json({
-            auth: encodeApiKey,
-            //Todo: impl of process aws_realtime_endpoint as env secret
-            ws: process.env.AWS_REALTIME_ENDPOINT
-        });
-        return;
-    }
-    res.status(503).json({error: "Issue with verification."});
-})
-
 // server
 
 
-// todo: remove if aws works properly
-const httpServer = http.createServer(app);
-const server = new WebSocket.Server({ server: httpServer });
+const server = new WebSocket.Server({ noServer: true});
 
 server.on("connection", (socket: ExtendedWebSocket) => {
     socket.id = generateRandomId();
@@ -483,8 +477,3 @@ setInterval(() => {
         client.ping();
     });
 }, 30000);
-
-const PORT = process.env.PORT || 8080;
-httpServer.listen(PORT, () => {
-    console.log(`Server is listening on port ${PORT}`);
-});
