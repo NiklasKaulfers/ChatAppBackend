@@ -18,7 +18,12 @@ interface ExtendedWebSocket extends WebSocket {
 const ROOM_SECRET_KEY = process.env.ROOM_SECRET_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 const HANDSHAKE_KEY = process.env.HANDSHAKE_KEY;
-if (!JWT_SECRET || !process.env.DATABASE_URL || !ROOM_SECRET_KEY || !process.env.AWS_ENDPOINT || !process.env.AWS_API_KEY || !HANDSHAKE_KEY) {
+if (!JWT_SECRET
+    || !process.env.DATABASE_URL
+    || !ROOM_SECRET_KEY
+    || !process.env.AWS_ENDPOINT
+    || !process.env.AWS_API_KEY
+    || !HANDSHAKE_KEY) {
     console.error("At least 1 missing secret")
     throw new Error("Secrets are missing.");
 }
@@ -473,3 +478,8 @@ setInterval(() => {
         client.ping();
     });
 }, 30000);
+
+
+app.listen(process.env.PORT, () => {
+    console.log("Server listening")
+})
