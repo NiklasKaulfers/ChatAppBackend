@@ -9,6 +9,7 @@ import { Amplify } from 'aws-amplify';
 import { events } from 'aws-amplify/data';
 import {checkValidCharsForDB} from "./check-valid-chars-for-db";
 import {getAuthProtocol} from "./encrypt";
+import {deprecate} from "node:util";
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
@@ -400,29 +401,32 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
 })
 
 
-// todo: impl with cognito and lambda but w.e
-// use restricted api key -> for handshake only
-app.get("/api/handshakeKey", async (req: Request, res: Response): Promise<void> => {
-    const auth : string | undefined = req.headers.authorization?.split(" ")[1];
-    if (!auth){
-        res.status(403).json({error: "Authorization missing."})
-        return ;
-    }
-    let verify;
-    try {
-        verify = jwt.verify(auth, JWT_SECRET) as {id: string};
-    }catch (e) {
-        res.status(403).json({error: "Invalid token."})
-        return;
-    }
-    if (verify.id){
-        const formatedHandshake = getAuthProtocol(HANDSHAKE_KEY);
-        res.status(200).json({handshake: formatedHandshake});
-        return
-    }
-    res.status(500).json({error: "Can not handle request properly."})
-    return ;
-})
+/**
+ * handshake function
+ * currently returns an encrypted api key -> auth without that needed for improved security
+ * @deprecated
+ */
+// app.get("/api/handshakeKey", async (req: Request, res: Response): Promise<void> => {
+//     const auth : string | undefined = req.headers.authorization?.split(" ")[1];
+//     if (!auth){
+//         res.status(403).json({error: "Authorization missing."})
+//         return ;
+//     }
+//     let verify;
+//     try {
+//         verify = jwt.verify(auth, JWT_SECRET) as {id: string};
+//     }catch (e) {
+//         res.status(403).json({error: "Invalid token."})
+//         return;
+//     }
+//     if (verify.id){
+//         const formatedHandshake = getAuthProtocol(HANDSHAKE_KEY);
+//         res.status(200).json({handshake: formatedHandshake});
+//         return
+//     }
+//     res.status(500).json({error: "Can not handle request properly."})
+//     return ;
+// })
 
 
 app.post("/api/messages", async (req: Request, res: Response): Promise<void> => {
