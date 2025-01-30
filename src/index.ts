@@ -54,7 +54,7 @@ const pool = new pg.Pool({
 const app = express();
 app.use(express.json());
 app.use(cors({
-    origin: "https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com",
+    origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com",  process.env.AWS_ENDPOINT],
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
     credentials: true,
@@ -178,6 +178,29 @@ app.post("/api/tokenRefresh", (req: Request, res: Response): void => {
         res.status(403).json({ error: "Invalid or expired refresh token." });
     }
 });
+
+
+// verification to be used by lambda
+// todo: should prop be options or smth
+app.post("/api/rooms/verifyUser", async (req: Request, res: Response): Promise<void> => {
+    const roomToken = req.body.roomtoken;
+    const room = req.body.room;
+    if (!roomToken) {
+        res.status(400).json({ error: "Room token is required." });
+        return;
+    }
+    const auth = jwt.verify(roomToken, JWT_SECRET) as {roomId: string, userId: string};
+    if (auth && room === auth.roomId) {
+        res.status(200).json({ message: "Successfully verified user." });
+        return;
+    }
+    if (!auth){
+        res.status(403).json({ error: "Invalid or expired token." });
+    }
+    if (room !== auth.roomId) {
+        res.status(403).json({ error: "Verification not for this room." });
+    }
+})
 
 app.post("/api/logout", (req: Request, res: Response): void => {
     const { refreshToken } = req.body;
