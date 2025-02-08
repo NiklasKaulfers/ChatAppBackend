@@ -9,6 +9,7 @@ import { Amplify } from 'aws-amplify';
 import { events } from 'aws-amplify/data';
 import {checkValidCharsForDB} from "./check-valid-chars-for-db";
 import {getAuthProtocol} from "./encrypt";
+import {deprecate} from "node:util";
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
@@ -54,7 +55,7 @@ const pool = new pg.Pool({
 const app = express();
 app.use(express.json());
 app.use(cors({
-    origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com", "https://chat-app-angular-dbba048e2d37.herokuapp.com/" ],
+    origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com",  process.env.AWS_ENDPOINT],
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
     credentials: true,
@@ -178,6 +179,29 @@ app.post("/api/tokenRefresh", (req: Request, res: Response): void => {
         res.status(403).json({ error: "Invalid or expired refresh token." });
     }
 });
+
+
+// verification to be used by lambda
+// todo: should prop be options or smth
+app.post("/api/rooms/verifyUser", async (req: Request, res: Response): Promise<void> => {
+    const roomToken = req.body.roomtoken;
+    const room = req.body.room;
+    if (!roomToken) {
+        res.status(400).json({ error: "Room token is required." });
+        return;
+    }
+    const auth = jwt.verify(roomToken, JWT_SECRET) as {roomId: string, userId: string};
+    if (auth && room === auth.roomId) {
+        res.status(200).json({ message: "Successfully verified user." });
+        return;
+    }
+    if (!auth){
+        res.status(403).json({ error: "Invalid or expired token." });
+    }
+    if (room !== auth.roomId) {
+        res.status(403).json({ error: "Verification not for this room." });
+    }
+})
 
 app.post("/api/logout", (req: Request, res: Response): void => {
     const { refreshToken } = req.body;
@@ -377,29 +401,32 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
 })
 
 
-// todo: impl with cognito and lambda but w.e
-// use restricted api key -> for handshake only
-app.get("/api/handshakeKey", async (req: Request, res: Response): Promise<void> => {
-    const auth : string | undefined = req.headers.authorization?.split(" ")[1];
-    if (!auth){
-        res.status(403).json({error: "Authorization missing."})
-        return ;
-    }
-    let verify;
-    try {
-        verify = jwt.verify(auth, JWT_SECRET) as {id: string};
-    }catch (e) {
-        res.status(403).json({error: "Invalid token."})
-        return;
-    }
-    if (verify.id){
-        const formatedHandshake = getAuthProtocol(HANDSHAKE_KEY);
-        res.status(200).json({handshake: formatedHandshake});
-        return
-    }
-    res.status(500).json({error: "Can not handle request properly."})
-    return ;
-})
+/**
+ * handshake function
+ * currently returns an encrypted api key -> auth without that needed for improved security
+ * @deprecated
+ */
+// app.get("/api/handshakeKey", async (req: Request, res: Response): Promise<void> => {
+//     const auth : string | undefined = req.headers.authorization?.split(" ")[1];
+//     if (!auth){
+//         res.status(403).json({error: "Authorization missing."})
+//         return ;
+//     }
+//     let verify;
+//     try {
+//         verify = jwt.verify(auth, JWT_SECRET) as {id: string};
+//     }catch (e) {
+//         res.status(403).json({error: "Invalid token."})
+//         return;
+//     }
+//     if (verify.id){
+//         const formatedHandshake = getAuthProtocol(HANDSHAKE_KEY);
+//         res.status(200).json({handshake: formatedHandshake});
+//         return
+//     }
+//     res.status(500).json({error: "Can not handle request properly."})
+//     return ;
+// })
 
 
 app.post("/api/messages", async (req: Request, res: Response): Promise<void> => {
