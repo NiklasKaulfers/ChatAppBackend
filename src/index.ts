@@ -54,7 +54,7 @@ const pool = new pg.Pool({
 const app = express();
 app.use(express.json());
 app.use(cors({
-    origin: "https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com",
+    origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com", "https://chat-app-angular-dbba048e2d37.herokuapp.com/" ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
     credentials: true,
