@@ -283,24 +283,20 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 });
 
 app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
-    console.log("Trying to log into room.");
     const pin: string | null = req.body.pin;
     const auth: string| undefined = req.headers.authorization?.split(" ")[1];
     let room ;
-    console.log("Checking auth.")
     if (!auth){
         res.status(403).json({error: "Authorization missing."});
         return;
     }
     const { roomId } = req.params;
 
-    console.log("Checking if ID can be used for db.")
     if (!checkValidCharsForDB(roomId)) {
-        res.status(403).json({ error: "Invalid or expired chars." });
+        res.status(403).json({ error: "Invalid chars." });
         return;
     }
 
-    console.log("Querying db.")
     try {
         const result =
             await pool.query("Select id, pin, creator from Rooms WHERE id = $1", [roomId]);
@@ -402,6 +398,7 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
 
 
 /**
+ * disabled cause insecure
  * handshake function
  * currently returns an encrypted api key -> auth without that needed for improved security
  * @deprecated
