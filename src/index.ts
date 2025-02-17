@@ -8,8 +8,6 @@ import { v4 as uuidV4 } from "uuid";
 import { Amplify } from 'aws-amplify';
 import { events } from 'aws-amplify/data';
 import {checkValidCharsForDB} from "./check-valid-chars-for-db";
-import {getAuthProtocol} from "./encrypt";
-import {deprecate} from "node:util";
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
