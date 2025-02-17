@@ -378,7 +378,7 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
     const { roomId } = req.params;
     const checkForDbManipulation = checkValidCharsForDB(roomId);
     if (!checkForDbManipulation){
-        res.status(403).json({error: "Invalid or expired chars."});
+        res.status(403).json({error: "Invalid characters in request."});
         return;
     }
     try {
@@ -393,6 +393,36 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Database error occurred." });
+    }
+})
+
+app.delete("/api/rooms/:roomId", async (req: Request, res: Response) => {
+    const { roomId } = req.params;
+    const checkValidityOfChars = checkValidCharsForDB(roomId);
+    if (!checkValidityOfChars){
+        res.status(403).json({error: "Invalid characters in request."});
+        return;
+    }
+    if (!req.headers.authorization){
+        res.status(403).json({error: "Authorization missing."});
+        return;
+    }
+    const auth = req.headers.authorization?.split(" ")[1];
+    const user = jwt.verify(auth, JWT_SECRET) as { id: string };
+    try {
+        const results = await pool.query("SELECT * FROM Rooms WHERE id = $1 AND creator = $2"
+            , [roomId, user.id]);
+        if (results.rows.length > 0) {
+            const deleteResults = await pool.query("Delete FROM Rooms WHERE id = $1 AND creator = $2"
+                , [roomId, user.id]);
+            res.status(200).json({message: `Successfully deleted room: ${roomId}`})
+            return;
+        }
+        res.status(404).json({error: "Room not found."});
+        return
+    } catch (e: any){
+        res.status(500).json({error: "Database error occurred."});
+        return;
     }
 })
 
