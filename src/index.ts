@@ -408,7 +408,18 @@ app.delete("/api/rooms/:roomId", async (req: Request, res: Response) => {
         return;
     }
     const auth = req.headers.authorization?.split(" ")[1];
-    const user = jwt.verify(auth, JWT_SECRET) as { id: string };
+
+    let user = null;
+    try {
+         user = jwt.verify(auth, JWT_SECRET) as { id: string };
+    } catch (err:any){
+        res.status(403).json({error: "User is not authorized."});
+        return;
+    }
+    if (!user){
+        res.status(500).json({error: "Error verifying"});
+    }
+
     try {
         const results = await pool.query("SELECT * FROM Rooms WHERE id = $1 AND creator = $2"
             , [roomId, user.id]);
