@@ -8,6 +8,8 @@ import { v4 as uuidV4 } from "uuid";
 import { Amplify } from 'aws-amplify';
 import { events } from 'aws-amplify/data';
 import {checkValidCharsForDB} from "./check-valid-chars-for-db";
+import {Server} from "socket.io";
+import {createServer} from "node:https";
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
@@ -89,7 +91,7 @@ const verifyPassword = async (inputPassword: string, storedPassword: string): Pr
 
 
 app.get("/api/status", (req: Request, res: Response): void => {
-    res.json({ status: "Server is running", connectedClients: server.clients.size });
+    res.json({ status: "Server is running"});
 });
 
 
@@ -502,46 +504,15 @@ app.post("/api/messages", async (req: Request, res: Response): Promise<void> => 
 // server
 
 
-const server = new WebSocket.Server({ noServer: true});
+const server = createServer(app);
+const io = new Server(server);
 
-server.on("connection", (socket: ExtendedWebSocket) => {
-    socket.id = generateRandomId();
-    socket.isAlive = true;
-
-    console.log(`Client connected: ${socket.id}`);
-
-    socket.on("message", (message: string) => {
-        console.log(`Received message from ${socket.id}: ${message}`);
-        server.clients.forEach((client) => {
-            if (client.readyState === WebSocket.OPEN && client !== socket) {
-                client.send(JSON.stringify({ user: socket.id, message }));
-            }
-        });
-    });
-
-    socket.on("pong", () => {
-        socket.isAlive = true;
-    });
-
-    socket.on("close", () => {
-        console.log(`Client disconnected: ${socket.id}`);
-    });
-
-    socket.send(JSON.stringify({ user: "Server", message: "Welcome to WebSocket!" }));
-});
-
-setInterval(() => {
-    server.clients.forEach((client) => {
-        const ws = client as ExtendedWebSocket;
-        if (!ws.isAlive) {
-            console.log(`Terminating inactive client: ${ws.id}`);
-            return client.terminate();
-        }
-        ws.isAlive = false;
-        client.ping();
-    });
-}, 30000);
-
+io.on("connection", (socket) => {
+    console.log("Client connected");
+    socket.on("message", ({token, message, user}) => {
+       console.log(token, message, user)
+    })
+})
 
 app.listen(process.env.PORT, () => {
     console.log("Server listening")
