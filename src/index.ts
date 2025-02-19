@@ -512,7 +512,7 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
         res.status(500).json({error: "Internal Server Error."});
         return ;
     }
-    const userMail: string = JSON.parse(req.body).mail;
+    const userMail: string = req.body.userMail;
     if (!userMail){
         res.status(404).json({error: "Email is missing."});
         return ;
