@@ -372,6 +372,35 @@ app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     }
 });
 
+app.get("/api/rooms/ownedByUser", async (req: Request, res: Response): Promise<void> => {
+    const auth: string | undefined = req.headers.authorization?.split(" ")[1];
+    if (!auth){
+        res.status(403).json({error: "Authorization missing."})
+        return ;
+    }
+    const user = jwt.verify(auth, JWT_SECRET) as {id: string};
+    if (!user){
+        res.status(403).json({error: "Authorization missing."})
+        return ;
+    }
+
+    try {
+        const rooms = await pool.query(
+            "Select id,display_name, creator, case when pin is null then 'False' else 'True' end as has_password from rooms"
+            + "where creator= $1", [user.id]
+        );
+        if (!rooms) {
+            res.status(200).json({ message: "No rooms found.", ids: [] });
+            return;
+        }
+
+        res.status(200).json({ rooms: rooms.rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Database error occurred." });
+    }
+})
+
 app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
     const { roomId } = req.params;
     const checkForDbManipulation = checkValidCharsForDB(roomId);
@@ -394,6 +423,10 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
     }
 })
 
+/**
+ * req.params: the room to delete
+ * req.headers.authorization: the user verification of the owner of that room
+ */
 app.delete("/api/rooms/:roomId", async (req: Request, res: Response) => {
     const { roomId } = req.params;
     const checkValidityOfChars = checkValidCharsForDB(roomId);
