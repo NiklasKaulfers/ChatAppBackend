@@ -1,4 +1,3 @@
-import * as WebSocket from "ws";
 import pg from "pg";
 import express, { Request, Response } from "express";
 import bcrypt from "bcryptjs";
@@ -12,10 +11,6 @@ import {Server} from "socket.io";
 import {createServer} from "node:https";
 import Mailjet from "node-mailjet";
 
-interface ExtendedWebSocket extends WebSocket {
-    isAlive: boolean;
-    id: string;
-}
 
 const ROOM_SECRET_KEY = process.env.ROOM_SECRET_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -512,7 +507,7 @@ app.post("/api/passwordManagement/changePassword", async (req: Request, res: Res
 
 app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Response): Promise<void> => {
     const MAILJET_API_KEY = process.env.MAILJET_API_KEY;
-    const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVATE_KEY;
+    const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVAT_KEY;
     if (!MAILJET_API_KEY || !MAILJET_PRIVATE_KEY){
         res.status(500).json({error: "Internal Server Error."});
         return ;
