@@ -531,6 +531,11 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
             res.status(500).json({error: "Email has too many accounts associated."})
             return;
         }
+        // todo: reactivate for testing deactivated
+        // if (dbResult.rows.length < 1) {
+        //     res.status(200).json({message: `Email send to ${userMail}`});
+        //     return;
+        // }
     } catch (e: any) {
         res.status(200).json({message: `Email send to ${userMail}`});
         return ;
@@ -567,11 +572,13 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
     mailJetRequest
         .then(result => {
             console.log("Successfully send mail.");
+            console.log(result.body)
             res.status(200).json({message: `Email send to ${userMail}`});
             return;
         })
         .catch(err => {
             console.log("Error sending mail.");
+            console.log(err.statusCode);
             res.status(500).json({error: "Internal Server error"});
             return;
         });
