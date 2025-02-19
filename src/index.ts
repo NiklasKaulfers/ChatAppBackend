@@ -511,13 +511,9 @@ app.post("/api/messages", async (req: Request, res: Response): Promise<void> => 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
     cors: {
-        origin: [
-            "https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com",
-            "https://chat-app-angular-dbba048e2d37.herokuapp.com",
-            process.env.AWS_ENDPOINT,
-        ],
-        methods: ["GET", "POST"],
-        credentials: true
+        origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com",
+            "https://chat-app-angular-dbba048e2d37.herokuapp.com"],
+        methods: ["GET", "POST", "PUT", "DELETE"],
     }
 });
 
