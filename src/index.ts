@@ -10,6 +10,7 @@ import { events } from 'aws-amplify/data';
 import {checkValidCharsForDB} from "./check-valid-chars-for-db";
 import {Server} from "socket.io";
 import {createServer} from "node:https";
+import Mailjet from "node-mailjet";
 
 interface ExtendedWebSocket extends WebSocket {
     isAlive: boolean;
@@ -442,35 +443,6 @@ app.get("/socket.io/", (req, res) => {
 });
 
 
-/**
- * disabled cause insecure
- * handshake function
- * currently returns an encrypted api key -> auth without that needed for improved security
- * @deprecated
- */
-// app.get("/api/handshakeKey", async (req: Request, res: Response): Promise<void> => {
-//     const auth : string | undefined = req.headers.authorization?.split(" ")[1];
-//     if (!auth){
-//         res.status(403).json({error: "Authorization missing."})
-//         return ;
-//     }
-//     let verify;
-//     try {
-//         verify = jwt.verify(auth, JWT_SECRET) as {id: string};
-//     }catch (e) {
-//         res.status(403).json({error: "Invalid token."})
-//         return;
-//     }
-//     if (verify.id){
-//         const formatedHandshake = getAuthProtocol(HANDSHAKE_KEY);
-//         res.status(200).json({handshake: formatedHandshake});
-//         return
-//     }
-//     res.status(500).json({error: "Can not handle request properly."})
-//     return ;
-// })
-
-
 app.post("/api/messages", async (req: Request, res: Response): Promise<void> => {
     const message = req.body.message;
 
@@ -502,6 +474,72 @@ app.post("/api/messages", async (req: Request, res: Response): Promise<void> => 
         return;
     }
     res.status(200).json({message: "Message sent."});
+})
+
+app.post("/api/passwordReset", async (req: Request, res: Response): Promise<void> => {
+    const MAILJET_API_KEY = process.env.MAILJET_API_KEY;
+    const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVATE_KEY;
+    if (!MAILJET_API_KEY || !MAILJET_PRIVATE_KEY){
+        res.status(500).json({error: "Internal Server Error."})
+    }
+    const userMail: string = JSON.parse(req.body).mail;
+    if (!userMail){
+        res.status(404).json({error: "Email is missing."})
+    }
+
+    // check db for existing email address
+    try {
+        const dbResult = await pool.query("Select email FROM Users where email = $1",
+            [userMail]);
+        if (dbResult.rows.length > 1){
+            res.status(500).json({error: "Email has too many accounts associated."})
+            return;
+        }
+    } catch (e: any) {
+        res.status(200).json({message: `Email send to ${userMail}`});
+    }
+
+    const changedPassword: string = ""
+
+    const mailjet = new Mailjet({
+        apiKey: MAILJET_API_KEY,
+        apiSecret: MAILJET_PRIVATE_KEY})
+    const mailJetRequest = mailjet.post("send", {version: "v3.1"}).request({
+        Messages: [
+            {
+                From: {
+                    Email: "no-reply@HSZG.Chat-App.de",
+                    Name: "HSZG Chat App"
+                },
+                To: [
+                    {
+                        Email: userMail,
+                        Name: "Chat App User"
+                    }
+                ],
+                Subject: "Password Reset of your HSZG Chat App Account",
+                TextPart: "Mail from Backend",
+                HTMLPart:
+                    "<h3>New Password for your account</h3>" +
+                    "<p>Your new Password: " +
+                    changedPassword
+                    + "</p>"
+            }
+        ]
+    })
+    mailJetRequest
+        .then(result => {
+            console.log("Successfully send mail.");
+            res.status(200).json({message: `Email send to ${userMail}`});
+            return;
+        })
+        .catch(err => {
+            console.log("Error sending mail.");
+            res.status(500).json({error: "Internal Server error"});
+            return;
+        });
+
+    res.status(500).json({error: "Internal Server error"});
 })
 
 
