@@ -437,6 +437,10 @@ app.delete("/api/rooms/:roomId", async (req: Request, res: Response) => {
     }
 })
 
+app.get("/socket.io/", (req, res) => {
+    res.send("WebSocket endpoint working!");
+});
+
 
 /**
  * disabled cause insecure
