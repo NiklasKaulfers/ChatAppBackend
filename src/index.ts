@@ -511,6 +511,7 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
     const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVAT_KEY;
     const chatEmailAddress: string | undefined = process.env.EMAIL;
     if (!MAILJET_API_KEY || !MAILJET_PRIVATE_KEY || !chatEmailAddress){
+        console.log("api keys error")
         res.status(500).json({error: "Internal Server Error."});
         return ;
     }
@@ -521,6 +522,7 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
     }
 
     if (!checkValidCharsForDB(userMail)){
+        console.log("characters in email werent valid")
         res.status(200).json({message: `Email send to ${userMail}`});
         return ;
     }
@@ -539,6 +541,7 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
         //     return;
         // }
     } catch (e: any) {
+        console.log("Error in db caught.")
         res.status(200).json({message: `Email send to ${userMail}`});
         return ;
     }
@@ -574,6 +577,7 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
         console.log(e.message);
     }
     if (!mailJetRequest){
+        console.log("email not sent.")
         res.status(500).json({error: "Internal Server error"});
         return;
     }
