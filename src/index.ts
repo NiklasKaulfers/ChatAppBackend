@@ -386,8 +386,8 @@ app.get("/api/rooms/ownedByUser", async (req: Request, res: Response): Promise<v
 
     try {
         const rooms = await pool.query(
-            "Select id,display_name, creator, case when pin is null then 'False' else 'True' end as has_password from rooms"
-            + "where creator= $1", [user.id]
+            "Select id,display_name, creator, case when pin is null then 'False' else 'True' end as has_password from rooms "
+            + "where creator = $1", [user.id]
         );
         if (!rooms) {
             res.status(200).json({ message: "No rooms found.", ids: [] });
