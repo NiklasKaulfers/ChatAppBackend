@@ -508,15 +508,40 @@ app.post("/api/messages", async (req: Request, res: Response): Promise<void> => 
 // server
 
 
-const server = createServer(app);
-const io = new Server(server);
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: {
+        origin: [
+            "https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com",
+            "https://chat-app-angular-dbba048e2d37.herokuapp.com",
+            process.env.AWS_ENDPOINT,
+        ],
+        methods: ["GET", "POST"],
+        credentials: true
+    }
+});
 
 io.on("connection", (socket) => {
-    console.log("Client connected");
-    socket.on("message", ({token, message, user}) => {
-       console.log(token, message, user)
-    })
-})
+    console.log("Client connected: " + socket.id);
+
+    socket.on("joinRoom", ({ roomId }) => {
+        socket.join(roomId);
+        console.log(`User joined room: ${roomId}`);
+    });
+
+    socket.on("message", ({ token, message, user, roomId }) => {
+        console.log(`Message received from ${user}: ${message}`);
+
+        // Broadcast the message to everyone in the same room
+        io.to(roomId).emit("message", { user, message });
+    });
+
+    socket.on("disconnect", () => {
+        console.log("Client disconnected: " + socket.id);
+    });
+});
+
+
 
 app.listen(process.env.PORT, () => {
     console.log("Server listening")
