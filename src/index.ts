@@ -489,6 +489,7 @@ app.post("/api/passwordManagement/changePassword", async (req: Request, res: Res
         res.status(403).json({error: "Invalid verify token."});
         return;
     }
+
     if (!checkValidCharsForDB(newPassword)){
         res.status(400).json({error: "Invalid characters"});
         return;
@@ -508,7 +509,8 @@ app.post("/api/passwordManagement/changePassword", async (req: Request, res: Res
 app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Response): Promise<void> => {
     const MAILJET_API_KEY = process.env.MAILJET_API_KEY;
     const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVAT_KEY;
-    if (!MAILJET_API_KEY || !MAILJET_PRIVATE_KEY){
+    const chatEmailAddress: string | undefined = process.env.EMAIL;
+    if (!MAILJET_API_KEY || !MAILJET_PRIVATE_KEY || !chatEmailAddress){
         res.status(500).json({error: "Internal Server Error."});
         return ;
     }
@@ -546,17 +548,17 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
     const mailjet = new Mailjet({
         apiKey: MAILJET_API_KEY,
         apiSecret: MAILJET_PRIVATE_KEY})
-    const mailJetRequest = mailjet.post("send", {version: "v3.1"}).request({
+    let mailJetRequest;
+    try{
+        mailJetRequest = await mailjet.post("send", {version: "v3.1"}).request({
         Messages: [
             {
                 From: {
-                    Email: "no-reply@HSZG.Chat-App.de",
-                    Name: "HSZG Chat App"
+                    Email: chatEmailAddress,
                 },
                 To: [
                     {
-                        Email: userMail,
-                        Name: "Chat App User"
+                        Email: userMail
                     }
                 ],
                 Subject: "Password Reset of your HSZG Chat App Account",
@@ -568,22 +570,17 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
                     + "</p>"
             }
         ]
-    })
-    mailJetRequest
-        .then(result => {
-            console.log("Successfully send mail.");
-            console.log(result.body)
-            res.status(200).json({message: `Email send to ${userMail}`});
-            return;
-        })
-        .catch(err => {
-            console.log("Error sending mail.");
-            console.log(err.statusCode);
-            res.status(500).json({error: "Internal Server error"});
-            return;
-        });
-
-    res.status(500).json({error: "Internal Server error"});
+    })}catch(e:any){
+        console.log(e.message);
+    }
+    if (!mailJetRequest){
+        res.status(500).json({error: "Internal Server error"});
+        return;
+    }
+   if (mailJetRequest.response.status === 200){
+       res.status(200).json({message: `Email send to ${userMail}`});
+       return ;
+   }
 })
 
 
