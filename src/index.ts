@@ -56,7 +56,9 @@ const pool = new pg.Pool({
 const app = express();
 app.use(express.json());
 app.use(cors({
-    origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com", "https://chat-app-angular-dbba048e2d37.herokuapp.com" , process.env.AWS_ENDPOINT],
+    origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com"
+        , "https://chat-app-angular-dbba048e2d37.herokuapp.com"
+        , process.env.AWS_ENDPOINT],
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
     credentials: true,
@@ -476,15 +478,54 @@ app.post("/api/messages", async (req: Request, res: Response): Promise<void> => 
     res.status(200).json({message: "Message sent."});
 })
 
-app.post("/api/passwordReset", async (req: Request, res: Response): Promise<void> => {
+app.post("/api/passwordManagement/changePassword", async (req: Request, res: Response): Promise<void> => {
+    const auth: string | undefined = req.headers.authorization?.split(" ")[1];
+    if (!auth){
+        res.status(403).json({error: "Authorization is missing."})
+        return ;
+    }
+    const newPassword: string | undefined = req.body.newPassword;
+    if (!newPassword){
+        res.status(400).json({error: "Credentials for update are missing."})
+        return ;
+    }
+    const user = jwt.verify(auth as string, JWT_SECRET) as {id:string};
+    if (!user){
+        res.status(403).json({error: "Invalid verify token."});
+        return;
+    }
+    if (!checkValidCharsForDB(newPassword)){
+        res.status(400).json({error: "Invalid characters"});
+        return;
+    }
+
+    try {
+        const dbResponse = pool.query("UPDATE Users Set pin = $1 WHERE id = $2", [
+            newPassword, user.id
+        ]);
+    } catch (e){
+        res.status(500).json({error: "Cant update db."})
+        return ;
+    }
+    res.status(200).json({message: "Successfully updated"})
+})
+
+app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Response): Promise<void> => {
     const MAILJET_API_KEY = process.env.MAILJET_API_KEY;
     const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVATE_KEY;
     if (!MAILJET_API_KEY || !MAILJET_PRIVATE_KEY){
-        res.status(500).json({error: "Internal Server Error."})
+        res.status(500).json({error: "Internal Server Error."});
+        return ;
     }
     const userMail: string = JSON.parse(req.body).mail;
     if (!userMail){
-        res.status(404).json({error: "Email is missing."})
+        res.status(404).json({error: "Email is missing."});
+        return ;
+    }
+
+    if (!checkValidCharsForDB(userMail)){
+        res.status(200).json({message: `Email send to ${userMail}`});
+        return ;
     }
 
     // check db for existing email address
@@ -497,6 +538,7 @@ app.post("/api/passwordReset", async (req: Request, res: Response): Promise<void
         }
     } catch (e: any) {
         res.status(200).json({message: `Email send to ${userMail}`});
+        return ;
     }
 
     const changedPassword: string = ""
