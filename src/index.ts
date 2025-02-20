@@ -528,15 +528,18 @@ app.post("/api/passwordManagement/changePassword", async (req: Request, res: Res
         return;
     }
 
-    try {
-        const dbResponse = pool.query("UPDATE Users Set pin = $1 WHERE id = $2", [
-            newPassword, user.id
-        ]);
-    } catch (e){
-        res.status(500).json({error: "Cant update db."})
-        return ;
+    const state = changePasswordOfUser(user.id, newPassword);
+    if (state.json.error){
+        res.status(state.state).json(state.json);
+        return;
     }
-    res.status(200).json({message: "Successfully updated"})
+    if (state.json.message){
+        res.status(state.state).json(state.json);
+        return;
+    }
+    res.status(500).json({error: "Internal Server Error."})
+    return
+
 })
 
 app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Response): Promise<void> => {
@@ -562,63 +565,97 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
 
     // check db for existing email address
     try {
-        const dbResult = await pool.query("Select email FROM Users where email = $1",
+        const dbResult = await pool.query("Select (email, id) FROM Users where email = $1",
             [userMail]);
         if (dbResult.rows.length > 1){
             res.status(500).json({error: "Email has too many accounts associated."})
             return;
         }
-        // todo: reactivate for testing deactivated
-        // if (dbResult.rows.length < 1) {
-        //     res.status(200).json({message: `Email send to ${userMail}`});
-        //     return;
-        // }
+        if (dbResult.rows.length < 1) {
+             res.status(200).json({message: `Email send to ${userMail}`});
+             return;
+        }
+        const changedPassword: string = generatePasswordArray(8);
+        const state = changePasswordOfUser(dbResult.rows[0].id, changedPassword);
+        if (state.json.error){
+            res.status(state.state).json(state.json);
+            return;
+        }
+        const mailjet = new Mailjet({
+            apiKey: MAILJET_API_KEY,
+            apiSecret: MAILJET_PRIVATE_KEY})
+        let mailJetRequest;
+        try{
+            mailJetRequest = await mailjet.post("send", {version: "v3.1"}).request({
+                Messages: [
+                    {
+                        From: {
+                            Email: chatEmailAddress,
+                        },
+                        To: [
+                            {
+                                Email: userMail
+                            }
+                        ],
+                        Subject: "Password Reset of your HSZG Chat App Account",
+                        TextPart: "Mail from Backend",
+                        HTMLPart:
+                            "<h3>New Password for your account</h3>" +
+                            "<p>Your new Password: " +
+                            changedPassword
+                            + "</p>"
+                    }
+                ]
+            })}catch(e:any){
+            console.log(e.message);
+        }
+        if (!mailJetRequest){
+            console.log("email not sent.")
+            res.status(500).json({error: "Internal Server error"});
+            return;
+        }
+        if (mailJetRequest.response.status === 200){
+            res.status(200).json({message: `Email send to ${userMail}`});
+            return ;
+        }
     } catch (e: any) {
         console.log("Error in db caught.")
         res.status(200).json({message: `Email send to ${userMail}`});
         return ;
     }
-
-    const changedPassword: string = ""
-
-    const mailjet = new Mailjet({
-        apiKey: MAILJET_API_KEY,
-        apiSecret: MAILJET_PRIVATE_KEY})
-    let mailJetRequest;
-    try{
-        mailJetRequest = await mailjet.post("send", {version: "v3.1"}).request({
-        Messages: [
-            {
-                From: {
-                    Email: chatEmailAddress,
-                },
-                To: [
-                    {
-                        Email: userMail
-                    }
-                ],
-                Subject: "Password Reset of your HSZG Chat App Account",
-                TextPart: "Mail from Backend",
-                HTMLPart:
-                    "<h3>New Password for your account</h3>" +
-                    "<p>Your new Password: " +
-                    changedPassword
-                    + "</p>"
-            }
-        ]
-    })}catch(e:any){
-        console.log(e.message);
-    }
-    if (!mailJetRequest){
-        console.log("email not sent.")
-        res.status(500).json({error: "Internal Server error"});
-        return;
-    }
-   if (mailJetRequest.response.status === 200){
-       res.status(200).json({message: `Email send to ${userMail}`});
-       return ;
-   }
 })
+
+interface ResponseStateAndJson{
+    state: number,
+    json: {
+        message?: string,
+        error?: string
+    }
+}
+
+function generatePasswordArray(length: number) {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+    return Array.from({ length }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
+}
+
+function changePasswordOfUser(user: string, newPassword: string): ResponseStateAndJson{
+    try {
+        const dbResponse = pool.query("UPDATE Users Set pin = $1 WHERE id = $2", [
+            newPassword, user
+        ]);
+    } catch (e){
+        return {
+            state: 500,
+            json: {
+                error: "Internal Server Error"
+            }
+        }
+    }
+    return {
+        state: 200,
+        json: {message: "Success"}
+    }
+}
 
 
 // server
