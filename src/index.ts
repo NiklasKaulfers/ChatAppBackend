@@ -1,12 +1,12 @@
 import pg from "pg";
-import express, { Request, Response } from "express";
+import express, {NextFunction, Request, Response} from "express";
 import bcrypt from "bcryptjs";
 import cors from "cors";
 import jwt from "jsonwebtoken";
 import { v4 as uuidV4 } from "uuid";
 import {checkValidCharsForDB} from "./check-valid-chars-for-db";
 import {Server, Socket} from "socket.io";
-import {createServer} from "node:https";
+import {createServer} from "node:http";
 import Mailjet from "node-mailjet";
 
 const MAILJET_API_KEY = process.env.MAILJET_API_KEY;
@@ -42,8 +42,9 @@ const pool = new pg.Pool({
 const app = express();
 app.use(express.json());
 app.use(cors({
-    origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com"
-        , "https://chat-app-angular-dbba048e2d37.herokuapp.com"],
+    // origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com"
+    //     , "https://chat-app-angular-dbba048e2d37.herokuapp.com"],
+    origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
     credentials: true,
@@ -919,9 +920,14 @@ io.on("connection", (socket: Socket) => {
     });
 });
 
-app.use((req: Request, res: Response, next: Function) => {
-    console.log(`Unhandled request: ${req.method} ${req.url}`);
-    res.status(404).json({ error: "Not found" });
+app.use((req: Request, res: Response, next: NextFunction) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    const originalSend = res.send;
+    res.send = function(body) {
+        console.log(`${new Date().toISOString()} - Response ${res.statusCode} for ${req.method} ${req.url}`);
+        return originalSend.call(this, body);
+    };
+    next();
 });
 
 // Error handling middleware with proper TypeScript types
