@@ -189,7 +189,7 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
         const accessToken : string = generateAccessToken(user.id);
         const refreshToken : string = generateRefreshToken(user.id);
         refreshTokens[user.id] = refreshToken;
-
+        console.log("function executed correctly");
         res.status(200).json({ message: `Logged in as ${username}`, accessToken: accessToken, refreshToken: refreshToken });
     } catch (err) {
         console.error(err);
