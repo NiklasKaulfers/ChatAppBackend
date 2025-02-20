@@ -117,9 +117,10 @@ app.post("/api/users", async (req: Request, res: Response) => {
 app.get("/api/users/:userId", async (req: Request, res: Response) => {
     const auth: string | undefined = req.headers.authorization?.split(" ")[1];
     if (!auth){
-        res.status(403).json({error: "Auth missing"})
+        res.status(403).json({error: "Auth missing"});
+        return;
     }
-    const verify = jwt.verify(auth as string, JWT_SECRET) as {id: string};
+    const verify = jwt.verify(auth, JWT_SECRET) as {id: string};
     if (!verify){
         res.status(403).json({error: "Wrong user credentials."});
     }
