@@ -49,7 +49,15 @@ app.use(cors({
     credentials: true,
     optionsSuccessStatus: 200,
 }));
-
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: {
+        origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com"
+            , "https://chat-app-angular-dbba048e2d37.herokuapp.com"],
+        methods: ["GET", "POST", "PUT", "DELETE"],
+        allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
+    }
+});
 
 app.options("*", cors());
 
@@ -817,14 +825,7 @@ interface RoomUsersMap {
     [roomId: string]: Set<string>;
 }
 
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-    cors: {
-        origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com",
-            "https://chat-app-angular-dbba048e2d37.herokuapp.com"],
-        methods: ["GET", "POST", "PUT", "DELETE"],
-    }
-});
+
 
 const roomUsers: RoomUsersMap = {};
 
