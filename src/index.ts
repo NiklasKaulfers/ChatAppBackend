@@ -9,14 +9,19 @@ import {Server} from "socket.io";
 import {createServer} from "node:https";
 import Mailjet from "node-mailjet";
 
-
+const MAILJET_API_KEY = process.env.MAILJET_API_KEY;
+const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVATE_KEY;
+const CHAT_EMAIL: string | undefined = process.env.EMAIL;
 const ROOM_SECRET_KEY = process.env.ROOM_SECRET_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 const HANDSHAKE_KEY = process.env.HANDSHAKE_KEY;
 if (!JWT_SECRET
     || !process.env.DATABASE_URL
     || !ROOM_SECRET_KEY
-    || !HANDSHAKE_KEY) {
+    || !HANDSHAKE_KEY
+    || !MAILJET_API_KEY
+    || !MAILJET_PRIVATE_KEY
+    || !CHAT_EMAIL) {
     console.error("At least 1 missing secret")
     throw new Error("Secrets are missing.");
 }
@@ -571,16 +576,6 @@ app.post("/api/passwordManagement/changePassword", async (req: Request, res: Res
 })
 
 app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Response): Promise<void> => {
-    const MAILJET_API_KEY = process.env.MAILJET_API_KEY;
-    const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVATE_KEY;
-    const chatEmailAddress: string | undefined = process.env.EMAIL;
-
-    if (!MAILJET_API_KEY || !MAILJET_PRIVATE_KEY || !chatEmailAddress) {
-        console.error("Missing API keys or email address");
-         res.status(500).json({ error: "Internal Server Error." });
-        return;
-    }
-
     const userMail: string | undefined = req.body.userMail;
 
     if (!userMail) {
@@ -614,7 +609,7 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
         const mailJetRequest = await mailjet.post("send", { version: "v3.1" }).request({
             Messages: [
                 {
-                    From: { Email: chatEmailAddress },
+                    From: { Email: CHAT_EMAIL },
                     To: [{ Email: userMail }],
                     Subject: "Password Reset for your HSZG Chat App Account",
                     TextPart: "Mail from Backend",
