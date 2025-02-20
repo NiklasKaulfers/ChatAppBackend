@@ -121,6 +121,7 @@ app.get("/api/users/:userId", async (req: Request, res: Response) => {
         return ;
     }
     try {
+        console.log("Attempting to verify token")
         const user = jwt.verify(auth, JWT_SECRET) as {id: string};
         if (!user){
             res.status(403).json({error: "Invalid token."})
@@ -145,8 +146,10 @@ app.get("/api/users/:userId", async (req: Request, res: Response) => {
     } catch (e: any) {
         console.log("Error verifying token:", e)
         if (e.name === 'TokenExpiredError') {
+            console.log("Token expired")
             res.status(401).json({error: "Token expired."});
         } else if (e.name === 'JsonWebTokenError') {
+            console.log("Token invalid");
             res.status(401).json({error: "Invalid token."});
         } else {
             res.status(500).json({error: "Internal Server error."});
