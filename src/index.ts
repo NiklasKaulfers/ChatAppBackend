@@ -126,7 +126,8 @@ app.get("/api/users/:userId", async (req: Request, res: Response) => {
         return ;
     }
     try {
-        const dbResult = await pool.query("Select (id, email) from Users where id = $1", [user.id]);
+        const dbResult = await pool.query("SELECT id, email FROM users WHERE id = $1", [user.id]);
+
         if (dbResult.rows.length !== 1){
             res.status(500).json({error: "Internal Server error."});
             return;
@@ -134,7 +135,7 @@ app.get("/api/users/:userId", async (req: Request, res: Response) => {
         res.status(200).json({
             id: dbResult.rows[0].id,
             email: dbResult.rows[0].email
-        })
+        });
     } catch (e){
         console.log("API Call users/:userId caused an error in the database.")
         res.status(500).json({error: "Internal Server error."});
@@ -391,6 +392,11 @@ app.get("/api/rooms/ownedByUser", async (req: Request, res: Response): Promise<v
         res.status(403).json({error: "Authorization missing."})
         return ;
     }
+    const verify = verifyToken(auth);
+    if (!verify){
+        res.status(403).json({error: "Illegal login"});
+        return;
+    }
     const user = jwt.verify(auth, JWT_SECRET) as {id: string};
     if (!user){
         res.status(403).json({error: "Authorization missing."})
@@ -454,6 +460,11 @@ app.delete("/api/rooms/:roomId", async (req: Request, res: Response) => {
     const auth = req.headers.authorization?.split(" ")[1];
 
     let user = null;
+    const verify = verifyToken(auth);
+    if (!verify){
+        res.status(403).json({error: "Illegal login"});
+        return;
+    }
     try {
          user = jwt.verify(auth, JWT_SECRET) as { id: string };
     } catch (err:any){
@@ -524,6 +535,11 @@ app.post("/api/passwordManagement/changePassword", async (req: Request, res: Res
     if (!auth){
         res.status(403).json({error: "Authorization is missing."})
         return ;
+    }
+    const verify = verifyToken(auth);
+    if (!verify){
+        res.status(403).json({error: "Illegal login"});
+        return;
     }
     const newPassword: string | undefined = req.body.newPassword;
     if (!newPassword){
@@ -645,6 +661,14 @@ interface ResponseStateAndJson{
         error?: string
     }
 }
+const verifyToken = (token: string) => {
+    try {
+        return jwt.verify(token, JWT_SECRET);
+    } catch (error: any) {
+        console.error("JWT Verification Failed:", error.message);
+        return null;
+    }
+};
 
 function generatePasswordArray(length: number) {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
