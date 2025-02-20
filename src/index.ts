@@ -26,6 +26,8 @@ if (!JWT_SECRET
     throw new Error("Secrets are missing.");
 }
 
+
+
 const ACCESS_TOKEN_EXPIRY = "2h";
 const REFRESH_TOKEN_EXPIRY = "7d";
 const ROOM_SECRET_EXPIRY = "2h";
@@ -48,6 +50,7 @@ app.use(cors({
     optionsSuccessStatus: 200,
 }));
 
+
 app.options("*", cors());
 
 const generateRandomId = (): string => uuidV4();
@@ -60,27 +63,11 @@ const generateRefreshToken = (userId: string): string => {
     return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
 };
 
-// Updated password verification function with enhanced reliability
+
 const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
-    // Trim the input password to remove any accidental whitespace
-    const cleanPassword = inputPassword.trim();
-
-    try {
-        // Try the async compare first
-        const result = await bcrypt.compare(cleanPassword, storedPassword);
-        console.log(`Password verification result: ${result}`);
-        return result;
-    } catch (err) {
-        console.error("Async bcrypt compare failed, trying sync compare:", err);
-
-        // Fall back to sync compare if the async one fails
-        try {
-            return bcrypt.compareSync(cleanPassword, storedPassword);
-        } catch (syncErr) {
-            console.error("Both async and sync bcrypt compare failed:", syncErr);
-            return false;
-        }
-    }
+    const result = await bcrypt.compare(inputPassword, storedPassword);
+    console.log(`Password verification result: ${result}`);
+    return result;
 };
 
 
@@ -92,11 +79,15 @@ const verifyPassword = async (inputPassword: string, storedPassword: string): Pr
 
  */
 
+
+
 app.get("/api/status", (req: Request, res: Response): void => {
     res.json({ status: "Server is running"});
 });
 
+
 //users
+
 
 app.post("/api/users", async (req: Request, res: Response) => {
     const { user, email, password } = req.body;
@@ -160,12 +151,11 @@ app.get("/api/users/:userId", async (req: Request, res: Response) => {
     }
 })
 
-//login
 
-// Updated login endpoint with enhanced debugging and error handling
+//login
 app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
     console.log("Login attempt initiated");
-    const username: string | undefined = req.body.username;
+    const username:string | undefined = req.body.username;
     const password: string | undefined = req.body.password;
 
     if (!username || !password) {
@@ -176,7 +166,6 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
 
     try {
         console.log(`Finding user with username: ${username}`);
-        // Ensure we're getting the exact field from database
         const result = await pool.query("SELECT id, pin FROM users WHERE id = $1", [username]);
         if (result.rows.length === 0) {
             console.log(`Login failed: No user found with username ${username}`);
@@ -185,47 +174,10 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
         }
 
         const user = result.rows[0];
-        const storedHash = user.pin;
+        console.log(`User found, attempting to verify password for ${username}`);
+        console.log(`Password length: ${password.length}, Hash length: ${user.pin.length}`);
 
-        console.log(`User found, attempting to verify password`);
-        console.log(`Password length: ${password.length}, Hash length: ${storedHash.length}`);
-
-        // Log password characters to check for invisible characters or encoding issues
-        const passwordChars = Array.from(password).map(c => c.charCodeAt(0));
-        console.log(`Password character codes: ${passwordChars.join(', ')}`);
-
-        // Try multiple verification approaches
-        let passwordMatch = false;
-
-        // Approach 1: Standard bcrypt compare
-        try {
-            passwordMatch = await bcrypt.compare(password, storedHash);
-            console.log(`Standard bcrypt compare result: ${passwordMatch}`);
-        } catch (compareErr) {
-            console.error("Error during bcrypt compare:", compareErr);
-        }
-
-        // Approach 2: If standard compare fails, try with trimmed password
-        if (!passwordMatch && password !== password.trim()) {
-            try {
-                const trimmedResult = await bcrypt.compare(password.trim(), storedHash);
-                console.log(`Trimmed password compare result: ${trimmedResult}`);
-                passwordMatch = trimmedResult;
-            } catch (trimErr) {
-                console.error("Error during trimmed password compare:", trimErr);
-            }
-        }
-
-        // Approach 3: Try with sync compare as a last resort
-        if (!passwordMatch) {
-            try {
-                const syncResult = bcrypt.compareSync(password, storedHash);
-                console.log(`Sync compare result: ${syncResult}`);
-                passwordMatch = syncResult;
-            } catch (syncErr) {
-                console.error("Error during sync compare:", syncErr);
-            }
-        }
+        const passwordMatch = await verifyPassword(password, user.pin);
 
         if (!passwordMatch) {
             console.log(`Login failed: Invalid password for user ${username}`);
@@ -234,14 +186,10 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
         }
 
         console.log(`Login successful for user ${username}`);
-        const accessToken: string = generateAccessToken(user.id);
-        const refreshToken: string = generateRefreshToken(user.id);
+        const accessToken : string = generateAccessToken(user.id);
+        const refreshToken : string = generateRefreshToken(user.id);
         refreshTokens[user.id] = refreshToken;
-        res.status(200).json({
-            message: `Logged in as ${username}`,
-            accessToken: accessToken,
-            refreshToken: refreshToken
-        });
+        res.status(200).json({ message: `Logged in as ${username}`, accessToken: accessToken, refreshToken: refreshToken });
     } catch (err) {
         console.error(`Login error for user ${username}:`, err);
         res.status(500).json({ error: "Database error occurred." });
@@ -299,6 +247,7 @@ app.post("/api/rooms/verifyUser", async (req: Request, res: Response): Promise<v
 })
 
 // rooms
+
 
 app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     const { pin, display_name } = req.body;
@@ -531,7 +480,7 @@ app.delete("/api/rooms/:roomId", async (req: Request, res: Response) => {
         return;
     }
     try {
-        user = jwt.verify(auth, JWT_SECRET) as { id: string };
+         user = jwt.verify(auth, JWT_SECRET) as { id: string };
     } catch (err:any){
         res.status(403).json({error: "User is not authorized."});
         return;
@@ -635,7 +584,6 @@ app.post("/api/passwordManagement/changePassword", async (req: Request, res: Res
 
 })
 
-// Updated password reset endpoint with improved logging and email formatting
 app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Response): Promise<void> => {
     const userMail: string | undefined = req.body.userMail;
     console.log(`Password reset requested for email: ${userMail}`);
@@ -729,15 +677,14 @@ interface ResponseStateAndJson{
     }
 }
 
-// Improved password generation function (removed special characters for better reliability)
+
+
 function generatePasswordArray(length: number) {
-    // Removed special characters to avoid encoding issues
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     const password = Array.from({ length }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
     console.log(`Generated password length: ${password.length}`);
     return password;
 }
-
 const verifyToken = (token: string) => {
     try {
         return jwt.verify(token, JWT_SECRET);
@@ -746,32 +693,15 @@ const verifyToken = (token: string) => {
         return null;
     }
 };
-
-// Updated password change function with better logging
 async function changePasswordOfUser(user: string, newPassword: string): Promise<ResponseStateAndJson> {
     try {
         console.log(`Changing password for user: ${user}`);
         console.log(`New password length: ${newPassword.length}`);
 
-        // Ensure the password is clean of any whitespace
-        const cleanPassword = newPassword.trim();
-
         // Use a consistent salt round value
         const saltRounds = 10;
-        const hashedPassword = await bcrypt.hash(cleanPassword, saltRounds);
+        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
         console.log(`Generated hash length: ${hashedPassword.length}`);
-
-        // Verify the hash immediately after generation
-        const verificationResult = await bcrypt.compare(cleanPassword, hashedPassword);
-        console.log(`Immediate verification after hash generation: ${verificationResult}`);
-
-        if (!verificationResult) {
-            console.error("Generated hash failed immediate verification!");
-            return {
-                state: 500,
-                json: { error: "Password hashing verification failed" }
-            };
-        }
 
         const dbResponse = await pool.query("UPDATE users SET pin = $1 WHERE id = $2 RETURNING *", [
             hashedPassword, user
@@ -781,33 +711,32 @@ async function changePasswordOfUser(user: string, newPassword: string): Promise<
             console.log(`Password change failed: User ${user} not found`);
             return {
                 state: 404,
-                json: { error: "User not found" }
+                json: {
+                    error: "User not found"
+                }
             };
         }
-
-        // Double-check the hash in the database after update
-        const verifyDbUpdate = await pool.query("SELECT pin FROM users WHERE id = $1", [user]);
-        const storedHash = verifyDbUpdate.rows[0].pin;
-        console.log(`Hash stored in database: ${storedHash}`);
-        console.log(`Hash length in database: ${storedHash.length}`);
-        const dbVerificationResult = await bcrypt.compare(cleanPassword, storedHash);
-        console.log(`Verification with hash from database: ${dbVerificationResult}`);
 
         console.log(`Password successfully updated for user: ${user}`);
         return {
             state: 200,
-            json: { message: "Password successfully updated" }
+            json: {
+                message: "Password successfully updated"
+            }
         };
     } catch (e) {
         console.error(`Error updating password for user ${user}:`, e);
         return {
             state: 500,
-            json: { error: "Internal Server Error" }
+            json: {
+                error: "Internal Server Error"
+            }
         };
     }
 }
 
 // server
+
 
 // having issues rn
 // todo: fix of websocket
@@ -820,3 +749,29 @@ const io = new Server(httpServer, {
         methods: ["GET", "POST", "PUT", "DELETE"],
     }
 });
+
+io.on("connection", (socket) => {
+    console.log("Client connected: " + socket.id);
+
+    socket.on("joinRoom", ({ roomId }) => {
+        socket.join(roomId);
+        console.log(`User joined room: ${roomId}`);
+    });
+
+    socket.on("message", ({ token, message, user, roomId }) => {
+        console.log(`Message received from ${user}: ${message}`);
+
+        // Broadcast the message to everyone in the same room
+        io.to(roomId).emit("message", { user, message });
+    });
+
+    socket.on("disconnect", () => {
+        console.log("Client disconnected: " + socket.id);
+    });
+});
+
+
+
+app.listen(process.env.PORT, () => {
+    console.log("Server listening")
+})
