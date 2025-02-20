@@ -4,8 +4,6 @@ import bcrypt from "bcryptjs";
 import cors from "cors";
 import jwt from "jsonwebtoken";
 import { v4 as uuidV4 } from "uuid";
-import { Amplify } from 'aws-amplify';
-import { events } from 'aws-amplify/data';
 import {checkValidCharsForDB} from "./check-valid-chars-for-db";
 import {Server} from "socket.io";
 import {createServer} from "node:https";
@@ -18,24 +16,12 @@ const HANDSHAKE_KEY = process.env.HANDSHAKE_KEY;
 if (!JWT_SECRET
     || !process.env.DATABASE_URL
     || !ROOM_SECRET_KEY
-    || !process.env.AWS_ENDPOINT
-    || !process.env.AWS_API_KEY
     || !HANDSHAKE_KEY) {
     console.error("At least 1 missing secret")
     throw new Error("Secrets are missing.");
 }
 
-// Amplify for AWS Appsync
-Amplify.configure({
-    "API": {
-        "Events": {
-            "endpoint": process.env.AWS_ENDPOINT,
-            "region": "eu-central-1",
-            "defaultAuthMode": "apiKey",
-            "apiKey": process.env.AWS_API_KEY,
-        }
-    }
-});
+
 
 const ACCESS_TOKEN_EXPIRY = "2h";
 const REFRESH_TOKEN_EXPIRY = "7d";
@@ -52,8 +38,7 @@ const app = express();
 app.use(express.json());
 app.use(cors({
     origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com"
-        , "https://chat-app-angular-dbba048e2d37.herokuapp.com"
-        , process.env.AWS_ENDPOINT],
+        , "https://chat-app-angular-dbba048e2d37.herokuapp.com"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
     credentials: true,
@@ -535,9 +520,8 @@ app.post("/api/messages", async (req: Request, res: Response): Promise<void> => 
 
     const sender: string = verify.userId;
     const room: string = verify.roomId;
-
-    const sendMessage =
-        await  events.post("/default/" + room, {message: message, sender: sender});
+    // todo work in process
+    const sendMessage = ""
     if (!sendMessage){
         res.status(500).json({error: "Could not post message to aws."});
         return;
@@ -588,89 +572,72 @@ app.post("/api/passwordManagement/changePassword", async (req: Request, res: Res
 
 app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Response): Promise<void> => {
     const MAILJET_API_KEY = process.env.MAILJET_API_KEY;
-    const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVAT_KEY;
+    const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVATE_KEY;
     const chatEmailAddress: string | undefined = process.env.EMAIL;
-    if (!MAILJET_API_KEY || !MAILJET_PRIVATE_KEY || !chatEmailAddress){
-        console.log("api keys error")
-        res.status(500).json({error: "Internal Server Error."});
-        return ;
+
+    if (!MAILJET_API_KEY || !MAILJET_PRIVATE_KEY || !chatEmailAddress) {
+        console.error("Missing API keys or email address");
+         res.status(500).json({ error: "Internal Server Error." });
+        return;
     }
+
     const userMail: string | undefined = req.body.userMail;
-    if (!userMail){
-        res.status(400).json({error: "Email is missing."});
-        return ;
+
+    if (!userMail) {
+         res.status(400).json({ error: "Email is missing." });
+        return
     }
 
-    if (!checkValidCharsForDB(userMail)){
-        console.log("characters in email werent valid")
-        res.status(200).json({message: `Email send to ${userMail}`});
-        return ;
+    if (!checkValidCharsForDB(userMail)) {
+        console.log("Invalid characters in email.");
+         res.status(400).json({ error: "Invalid characters in email." });
+        return;
     }
 
-    // check db for existing email address
     try {
-        const dbResult = await pool.query("Select (email, id) FROM users where email = $1",
-            [userMail]);
-        if (dbResult.rows.length > 1){
-            res.status(500).json({error: "Email has too many accounts associated."})
+        const dbResult = await pool.query("SELECT email, id FROM users WHERE email = $1", [userMail]);
+
+        if (dbResult.rows.length !== 1) {
+             res.status(404).json({ error: "Email not found or has multiple accounts." });
             return;
         }
-        if (dbResult.rows.length < 1) {
-             res.status(200).json({message: `Email send to ${userMail}`});
-             return;
-        }
+
         const changedPassword: string = generatePasswordArray(8);
         const state = await changePasswordOfUser(dbResult.rows[0].id, changedPassword);
-        if (state.json.error){
-            res.status(state.state).json(state.json);
+
+        if (state.json.error) {
+             res.status(state.state).json(state.json);
             return;
         }
-        const mailjet = new Mailjet({
-            apiKey: MAILJET_API_KEY,
-            apiSecret: MAILJET_PRIVATE_KEY})
-        let mailJetRequest;
-        try{
-            mailJetRequest = await mailjet.post("send", {version: "v3.1"}).request({
-                Messages: [
-                    {
-                        From: {
-                            Email: chatEmailAddress,
-                        },
-                        To: [
-                            {
-                                Email: userMail
-                            }
-                        ],
-                        Subject: "Password Reset of your HSZG Chat App Account",
-                        TextPart: "Mail from Backend",
-                        HTMLPart:
-                            "<h3>New Password for your account</h3>" +
-                            "<p>Your new Password: " +
-                            changedPassword
-                            + "</p>"
-                    }
-                ]
-            })}catch(e:any){
-            console.log(e.message);
-            console.log("email not sent.")
-            res.status(500).json({error: "Internal Server error"});
+
+        const mailjet = new Mailjet({ apiKey: MAILJET_API_KEY, apiSecret: MAILJET_PRIVATE_KEY });
+        const mailJetRequest = await mailjet.post("send", { version: "v3.1" }).request({
+            Messages: [
+                {
+                    From: { Email: chatEmailAddress },
+                    To: [{ Email: userMail }],
+                    Subject: "Password Reset for your HSZG Chat App Account",
+                    TextPart: "Mail from Backend",
+                    HTMLPart: `<h3>Your new password: ${changedPassword}</h3>`
+                }
+            ]
+        });
+
+        if (mailJetRequest.response.status === 200) {
+             res.status(200).json({ message: `Email sent to ${userMail}` });
             return;
+        } else {
+            console.error("MailJet error:", mailJetRequest.response);
+             res.status(500).json({ error: "Failed to send email." });
+            return
         }
-        if (!mailJetRequest){
-            console.log("email not sent.")
-            res.status(500).json({error: "Internal Server error"});
-            return;
-        }
-        if (mailJetRequest.response.status === 200){
-            res.status(200).json({message: `Email send to ${userMail}`});
-            return ;
-        }
-    } catch (e: any) {
-        console.log("Error in db caught.")
-        res.status(200).json({message: `Email send to ${userMail}`});
-        return ;
+
+    } catch (err) {
+        console.error("Database or processing error:", err);
+         res.status(500).json({ error: "Internal Server error" });
+         return ;
     }
-})
+});
 
 interface ResponseStateAndJson{
     state: number,
@@ -678,6 +645,13 @@ interface ResponseStateAndJson{
         message?: string,
         error?: string
     }
+}
+
+
+
+function generatePasswordArray(length: number) {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+    return Array.from({ length }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
 }
 const verifyToken = (token: string) => {
     try {
@@ -687,11 +661,6 @@ const verifyToken = (token: string) => {
         return null;
     }
 };
-
-function generatePasswordArray(length: number) {
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-    return Array.from({ length }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
-}
 async function changePasswordOfUser(user: string, newPassword: string): Promise<ResponseStateAndJson> {
     try {
         const hashedPassword = await bcrypt.hash(newPassword, 10);
