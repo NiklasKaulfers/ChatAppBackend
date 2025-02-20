@@ -114,6 +114,34 @@ app.post("/api/users", async (req: Request, res: Response) => {
     }
 });
 
+app.get("/api/users/:userId", async (req: Request, res: Response) => {
+    const auth: string | undefined = req.headers.authorization?.split(" ")[1];
+    if (!auth){
+        res.status(403).json({error: "Auth missing"})
+    }
+    const verify = jwt.verify(auth as string, JWT_SECRET) as {id: string};
+    if (!verify){
+        res.status(403).json({error: "Wrong user credentials."});
+    }
+    try {
+        const dbResult = await pool.query("Select (id, email) from Users where id = $1", [verify.id]);
+        if (dbResult.rows.length !== 1){
+            res.status(500).json({error: "Internal Server error."});
+            return;
+        }
+        res.status(200).json({
+            id: dbResult.rows[0].id,
+            email: dbResult.rows[0].email
+        })
+    } catch (e){
+        console.log("API Call users/:userId caused an error in the database.")
+        res.status(500).json({error: "Internal Server error."});
+        return;
+    }
+    console.log("API Call users/:userId failed.")
+    res.status(500).json({error: "Internal Server error."})
+})
+
 //login
 
 app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
@@ -200,26 +228,6 @@ app.post("/api/rooms/verifyUser", async (req: Request, res: Response): Promise<v
         res.status(403).json({ error: "Verification not for this room." });
     }
 })
-
-app.post("/api/logout", (req: Request, res: Response): void => {
-    const { refreshToken } = req.body;
-
-    if (!refreshToken) {
-        res.status(400).json({ error: "Refresh token is required." });
-        return;
-    }
-
-    try {
-        const decoded = jwt.verify(refreshToken, JWT_SECRET) as { id: string };
-        const userId = decoded.id;
-        delete refreshTokens[userId];
-
-        res.status(200).json({ message: "Logged out successfully." });
-    } catch (err) {
-        console.error(err);
-        res.status(403).json({ error: "Invalid or expired refresh token." });
-    }
-});
 
 // rooms
 
@@ -660,6 +668,9 @@ function changePasswordOfUser(user: string, newPassword: string): ResponseStateA
 
 // server
 
+
+// having issues rn
+// todo: fix of websocket
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
