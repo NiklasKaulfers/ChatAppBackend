@@ -838,3 +838,7 @@ io.on("connection", (socket) => {
 app.listen(process.env.PORT, () => {
     console.log("Server listening")
 })
+
+httpServer.listen(process.env.PORT, () => {
+    console.log("Server listening with socket.io support");
+});
