@@ -54,7 +54,7 @@ const io = new Server(httpServer, {
     cors: {
         origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com"
             , "https://chat-app-angular-dbba048e2d37.herokuapp.com"],
-        methods: ["GET", "POST", "PUT", "DELETE"],
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
     }
 });
