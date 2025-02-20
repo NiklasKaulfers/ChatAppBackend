@@ -596,7 +596,7 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
     }
     const userMail: string | undefined = req.body.userMail;
     if (!userMail){
-        res.status(404).json({error: "Email is missing."});
+        res.status(400).json({error: "Email is missing."});
         return ;
     }
 
