@@ -117,15 +117,16 @@ app.post("/api/users", async (req: Request, res: Response) => {
 app.get("/api/users/:userId", async (req: Request, res: Response) => {
     const auth: string | undefined = req.headers.authorization?.split(" ")[1];
     if (!auth){
-        res.status(403).json({error: "Auth missing"});
-        return;
+        res.status(403).json({error: "Authorization missing."})
+        return ;
     }
-    const verify = jwt.verify(auth, JWT_SECRET) as {id: string};
-    if (!verify){
-        res.status(403).json({error: "Wrong user credentials."});
+    const user = jwt.verify(auth, JWT_SECRET) as {id: string};
+    if (!user){
+        res.status(403).json({error: "Authorization missing."})
+        return ;
     }
     try {
-        const dbResult = await pool.query("Select (id, email) from Users where id = $1", [verify.id]);
+        const dbResult = await pool.query("Select (id, email) from Users where id = $1", [user.id]);
         if (dbResult.rows.length !== 1){
             res.status(500).json({error: "Internal Server error."});
             return;
@@ -146,8 +147,8 @@ app.get("/api/users/:userId", async (req: Request, res: Response) => {
 //login
 
 app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
-    const username = req.body.username;
-    const password = req.body.password;
+    const username:string | undefined = req.body.username;
+    const password: string | undefined = req.body.password;
 
     if (!username || !password) {
         res.status(400).json({ error: "Username and password are required." });
@@ -169,8 +170,8 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        const accessToken = generateAccessToken(user.id);
-        const refreshToken = generateRefreshToken(user.id);
+        const accessToken : string = generateAccessToken(user.id);
+        const refreshToken : string = generateRefreshToken(user.id);
         refreshTokens[user.id] = refreshToken;
 
         res.status(200).json({ message: `Logged in as ${username}`, accessToken: accessToken, refreshToken: refreshToken });
@@ -211,8 +212,8 @@ app.post("/api/tokenRefresh", (req: Request, res: Response): void => {
 // verification to be used by lambda
 // todo: should prop be options or smth
 app.post("/api/rooms/verifyUser", async (req: Request, res: Response): Promise<void> => {
-    const roomToken = req.body.roomtoken;
-    const room = req.body.room;
+    const roomToken: string | undefined = req.body.roomtoken;
+    const room: string | undefined = req.body.room;
     if (!roomToken) {
         res.status(400).json({ error: "Room token is required." });
         return;
@@ -278,14 +279,16 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
             }
 
             res.status(201).json({message: `Room ${roomId} created with display name ${display_name}.`});
-
+            return;
         } catch (err) {
             console.error(err);
             res.status(403).json({error: "Invalid or expired token."});
+            return ;
         }
     } catch (err) {
         console.error(err);
         res.status(500).json({error: "Internal server error."});
+        return;
     }
 });
 
@@ -295,6 +298,19 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
     let room ;
     if (!auth){
         res.status(403).json({error: "Authorization missing."});
+        return;
+    }
+    //Checking auth.
+    let userConfirm: {id: string};
+    try {
+        userConfirm = jwt.verify(auth, JWT_SECRET) as { id: string };
+    } catch (err){
+        console.error("Caught error with jwt verify.")
+        res.status(500).json({error: "Error verifying"});
+        return;
+    }
+    if (!userConfirm){
+        res.status(403).json({error: "Invalid jwt token."});
         return;
     }
     const { roomId } = req.params;
@@ -317,19 +333,7 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
         return;
     }
 
-    //Checking auth.
-    let userConfirm: {id: string};
-    try {
-        userConfirm = jwt.verify(auth, JWT_SECRET) as { id: string };
-    } catch (err){
-        console.error("Caught error with jwt verify.")
-        res.status(500).json({error: "Error verifying"});
-        return ;
-    }
-    if (!userConfirm){
-        res.status(403).json({error: "Invalid jwt token."});
-        return;
-    }
+
     //Creating key.
     const roomToken = jwt.sign({roomId: roomId, userId: userConfirm.id}
         , ROOM_SECRET_KEY
