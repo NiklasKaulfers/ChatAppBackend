@@ -120,30 +120,41 @@ app.get("/api/users/:userId", async (req: Request, res: Response) => {
         res.status(403).json({error: "Authorization missing."})
         return ;
     }
-    const user = jwt.verify(auth, JWT_SECRET) as {id: string};
-    if (!user){
-        res.status(403).json({error: "Authorization missing."})
-        return ;
-    }
     try {
-        const dbResult = await pool.query("SELECT id, email FROM users WHERE id = $1", [user.id]);
+        const user = jwt.verify(auth, JWT_SECRET) as {id: string};
+        if (!user){
+            res.status(403).json({error: "Invalid token."})
+            return ;
+        }
+        try {
+            const dbResult = await pool.query("SELECT id, email FROM users WHERE id = $1", [user.id]);
 
-        if (dbResult.rows.length !== 1){
+            if (dbResult.rows.length !== 1){
+                res.status(404).json({error: "User not found."});
+                return;
+            }
+            res.status(200).json({
+                id: dbResult.rows[0].id,
+                email: dbResult.rows[0].email
+            });
+        } catch (e){
+            console.log("API Call users/:userId caused an error in the database.", e)
             res.status(500).json({error: "Internal Server error."});
             return;
         }
-        res.status(200).json({
-            id: dbResult.rows[0].id,
-            email: dbResult.rows[0].email
-        });
-    } catch (e){
-        console.log("API Call users/:userId caused an error in the database.")
-        res.status(500).json({error: "Internal Server error."});
+    } catch (e: any) {
+        console.log("Error verifying token:", e)
+        if (e.name === 'TokenExpiredError') {
+            res.status(401).json({error: "Token expired."});
+        } else if (e.name === 'JsonWebTokenError') {
+            res.status(401).json({error: "Invalid token."});
+        } else {
+            res.status(500).json({error: "Internal Server error."});
+        }
         return;
     }
-    console.log("API Call users/:userId failed.")
-    res.status(500).json({error: "Internal Server error."})
 })
+
 
 //login
 
