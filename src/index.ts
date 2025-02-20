@@ -691,8 +691,9 @@ function generatePasswordArray(length: number) {
 
 async function changePasswordOfUser(user: string, newPassword: string): Promise<ResponseStateAndJson> {
     try {
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
         const dbResponse = await pool.query("UPDATE Users Set pin = $1 WHERE id = $2", [
-            newPassword, user
+            hashedPassword, user
         ]);
     } catch (e) {
         return {
