@@ -11,7 +11,7 @@ import Mailjet from "node-mailjet";
 
 const MAILJET_API_KEY = process.env.MAILJET_API_KEY;
 const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVATE_KEY;
-const CHAT_EMAIL: string | undefined = process.env.EMAIL;
+const CHAT_EMAIL = process.env.EMAIL;
 const ROOM_SECRET_KEY = process.env.ROOM_SECRET_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 const HANDSHAKE_KEY = process.env.HANDSHAKE_KEY;
@@ -63,8 +63,11 @@ const generateRefreshToken = (userId: string): string => {
     return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
 };
 
+
 const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
-    return bcrypt.compare(inputPassword, storedPassword);
+    const result = await bcrypt.compare(inputPassword, storedPassword);
+    console.log(`Password verification result: ${result}`);
+    return result;
 };
 
 
@@ -150,39 +153,45 @@ app.get("/api/users/:userId", async (req: Request, res: Response) => {
 
 
 //login
-
 app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
-    console.log("login function")
+    console.log("Login attempt initiated");
     const username:string | undefined = req.body.username;
     const password: string | undefined = req.body.password;
 
     if (!username || !password) {
+        console.log("Login failed: Missing username or password");
         res.status(400).json({ error: "Username and password are required." });
         return;
     }
 
     try {
+        console.log(`Finding user with username: ${username}`);
         const result = await pool.query("SELECT id, pin FROM users WHERE id = $1", [username]);
         if (result.rows.length === 0) {
+            console.log(`Login failed: No user found with username ${username}`);
             res.status(404).json({ error: "No user found." });
             return;
         }
 
         const user = result.rows[0];
+        console.log(`User found, attempting to verify password for ${username}`);
+        console.log(`Password length: ${password.length}, Hash length: ${user.pin.length}`);
+
         const passwordMatch = await verifyPassword(password, user.pin);
 
         if (!passwordMatch) {
+            console.log(`Login failed: Invalid password for user ${username}`);
             res.status(403).json({ error: "Invalid password." });
             return;
         }
 
+        console.log(`Login successful for user ${username}`);
         const accessToken : string = generateAccessToken(user.id);
         const refreshToken : string = generateRefreshToken(user.id);
         refreshTokens[user.id] = refreshToken;
-        console.log("function executed correctly");
         res.status(200).json({ message: `Logged in as ${username}`, accessToken: accessToken, refreshToken: refreshToken });
     } catch (err) {
-        console.error(err);
+        console.error(`Login error for user ${username}:`, err);
         res.status(500).json({ error: "Database error occurred." });
     }
 });
@@ -577,60 +586,86 @@ app.post("/api/passwordManagement/changePassword", async (req: Request, res: Res
 
 app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Response): Promise<void> => {
     const userMail: string | undefined = req.body.userMail;
+    console.log(`Password reset requested for email: ${userMail}`);
 
     if (!userMail) {
-         res.status(400).json({ error: "Email is missing." });
-        return
+        console.log("Password reset failed: Email is missing");
+        res.status(400).json({ error: "Email is missing." });
+        return;
     }
 
     if (!checkValidCharsForDB(userMail)) {
-        console.log("Invalid characters in email.");
-         res.status(400).json({ error: "Invalid characters in email." });
+        console.log(`Password reset failed: Invalid characters in email: ${userMail}`);
+        res.status(400).json({ error: "Invalid characters in email." });
         return;
     }
 
     try {
+        console.log(`Looking up user with email: ${userMail}`);
         const dbResult = await pool.query("SELECT email, id FROM users WHERE email = $1", [userMail]);
 
         if (dbResult.rows.length !== 1) {
-             res.status(404).json({ error: "Email not found or has multiple accounts." });
+            console.log(`Password reset failed: Email not found or has multiple accounts: ${userMail}`);
+            res.status(404).json({ error: "Email not found or has multiple accounts." });
             return;
         }
 
-        const changedPassword: string = generatePasswordArray(8);
-        const state = await changePasswordOfUser(dbResult.rows[0].id, changedPassword);
+        const userId = dbResult.rows[0].id;
+        console.log(`User found with ID: ${userId}`);
+
+        // Generate password with alphanumeric characters only
+        const changedPassword: string = generatePasswordArray(10); // Increased to 10 characters for better security
+        console.log(`Generated new password for user ${userId}`);
+
+        const state = await changePasswordOfUser(userId, changedPassword);
 
         if (state.json.error) {
-             res.status(state.state).json(state.json);
+            console.log(`Password reset failed: ${state.json.error}`);
+            res.status(state.state).json(state.json);
             return;
         }
 
+        // Create a more user-friendly email with clear instructions
+        const emailBody = `
+            <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                    <h2>Password Reset for HSZG Chat App</h2>
+                    <p>A password reset was requested for your account.</p>
+                    <p>Your new password is: <strong>${changedPassword}</strong></p>
+                    <p>Please log in with this password and change it immediately for security reasons.</p>
+                    <p>If you did not request this password reset, please contact support.</p>
+                </body>
+            </html>
+        `;
+
+        console.log(`Sending password reset email to: ${userMail}`);
         const mailjet = new Mailjet({ apiKey: MAILJET_API_KEY, apiSecret: MAILJET_PRIVATE_KEY });
         const mailJetRequest = await mailjet.post("send", { version: "v3.1" }).request({
             Messages: [
                 {
-                    From: { Email: CHAT_EMAIL },
+                    From: { Email: CHAT_EMAIL, Name: "HSZG Chat App" },
                     To: [{ Email: userMail }],
                     Subject: "Password Reset for your HSZG Chat App Account",
-                    TextPart: "Mail from Backend",
-                    HTMLPart: `<h3>Your new password: ${changedPassword}</h3>`
+                    TextPart: `Your new password is: ${changedPassword}`,
+                    HTMLPart: emailBody
                 }
             ]
         });
 
         if (mailJetRequest.response.status === 200) {
-             res.status(200).json({ message: `Email sent to ${userMail}` });
+            console.log(`Password reset email sent successfully to: ${userMail}`);
+            res.status(200).json({ message: `Email sent to ${userMail}` });
             return;
         } else {
             console.error("MailJet error:", mailJetRequest.response);
-             res.status(500).json({ error: "Failed to send email." });
-            return
+            res.status(500).json({ error: "Failed to send email." });
+            return;
         }
 
     } catch (err) {
-        console.error("Database or processing error:", err);
-         res.status(500).json({ error: "Internal Server error" });
-         return ;
+        console.error("Password reset - Database or processing error:", err);
+        res.status(500).json({ error: "Internal Server error" });
+        return;
     }
 });
 
@@ -645,8 +680,10 @@ interface ResponseStateAndJson{
 
 
 function generatePasswordArray(length: number) {
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-    return Array.from({ length }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const password = Array.from({ length }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
+    console.log(`Generated password length: ${password.length}`);
+    return password;
 }
 const verifyToken = (token: string) => {
     try {
@@ -658,12 +695,20 @@ const verifyToken = (token: string) => {
 };
 async function changePasswordOfUser(user: string, newPassword: string): Promise<ResponseStateAndJson> {
     try {
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        console.log(`Changing password for user: ${user}`);
+        console.log(`New password length: ${newPassword.length}`);
+
+        // Use a consistent salt round value
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+        console.log(`Generated hash length: ${hashedPassword.length}`);
+
         const dbResponse = await pool.query("UPDATE users SET pin = $1 WHERE id = $2 RETURNING *", [
             hashedPassword, user
         ]);
 
         if (dbResponse.rowCount === 0) {
+            console.log(`Password change failed: User ${user} not found`);
             return {
                 state: 404,
                 json: {
@@ -672,6 +717,7 @@ async function changePasswordOfUser(user: string, newPassword: string): Promise<
             };
         }
 
+        console.log(`Password successfully updated for user: ${user}`);
         return {
             state: 200,
             json: {
@@ -679,7 +725,7 @@ async function changePasswordOfUser(user: string, newPassword: string): Promise<
             }
         };
     } catch (e) {
-        console.error("Error updating password:", e);
+        console.error(`Error updating password for user ${user}:`, e);
         return {
             state: 500,
             json: {
