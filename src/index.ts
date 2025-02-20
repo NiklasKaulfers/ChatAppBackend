@@ -27,7 +27,7 @@ if (!JWT_SECRET
 }
 
 
-
+const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN_EXPIRY = "2h";
 const REFRESH_TOKEN_EXPIRY = "7d";
 const ROOM_SECRET_EXPIRY = "2h";
@@ -44,10 +44,10 @@ app.use(express.json());
 app.use(cors({
     origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com"
         , "https://chat-app-angular-dbba048e2d37.herokuapp.com"],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
     credentials: true,
-    optionsSuccessStatus: 200,
+    optionsSuccessStatus: 204,
 }));
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -101,6 +101,10 @@ const verifyPassword = async (inputPassword: string, storedPassword: string): Pr
  */
 
 
+app.options("*", (req, res) => {
+    console.log(`Received OPTIONS request for ${req.path}`);
+    res.status(204).send();
+});
 
 app.get("/api/status", (req: Request, res: Response): void => {
     res.json({ status: "Server is running"});
@@ -915,7 +919,20 @@ io.on("connection", (socket: Socket) => {
     });
 });
 
+app.use((req: Request, res: Response, next: Function) => {
+    console.log(`Unhandled request: ${req.method} ${req.url}`);
+    res.status(404).json({ error: "Not found" });
+});
+
+// Error handling middleware with proper TypeScript types
+app.use((err: Error, req: Request, res: Response, next: Function) => {
+    console.error(`Server error: ${err.message}`);
+    if (!res.headersSent) {
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
 // Make sure to use the httpServer to listen, not app.listen
-httpServer.listen(process.env.PORT, () => {
-    console.log(`Server listening on port ${process.env.PORT} with socket.io support`);
+httpServer.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT} with socket.io support`);
 });
