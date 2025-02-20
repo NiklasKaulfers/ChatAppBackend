@@ -162,6 +162,7 @@ app.get("/api/users/:userId", async (req: Request, res: Response) => {
 //login
 
 app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
+    console.log("login function")
     const username:string | undefined = req.body.username;
     const password: string | undefined = req.body.password;
 
