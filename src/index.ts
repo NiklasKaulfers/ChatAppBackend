@@ -285,11 +285,11 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 
 
             if (!pin) {
-                await pool.query("INSERT INTO Rooms (id, display_name, creator) VALUES ($1, $2, $3)"
+                await pool.query("INSERT INTO rooms (id, display_name, creator) VALUES ($1, $2, $3)"
                     , [roomId, display_name, userId]);
             } else {
                 const hashedPassword = await bcrypt.hash(pin, 10);
-                await pool.query("INSERT INTO Rooms (id, display_name, pin, creator) VALUES ($1, $2, $3, $4)"
+                await pool.query("INSERT INTO rooms (id, display_name, pin, creator) VALUES ($1, $2, $3, $4)"
                     , [roomId, display_name, hashedPassword, userId]);
             }
 
@@ -337,7 +337,7 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
 
     try {
         const result =
-            await pool.query("Select id, pin, creator from Rooms WHERE id = $1", [roomId]);
+            await pool.query("Select id, pin, creator from rooms WHERE id = $1", [roomId]);
         if (result.rows.length === 0){
             res.status(404).json({error: "Room not found."});
             return;
@@ -443,7 +443,7 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
     }
     try {
         const result =
-            await pool.query("SELECT id, display_name, creator FROM Rooms WHERE id = $1"
+            await pool.query("SELECT id, display_name, creator FROM rooms WHERE id = $1"
                 , [roomId]);
         if (result.rows.length > 0) {
             res.status(200).json({ room: result.rows[0] });
@@ -490,10 +490,10 @@ app.delete("/api/rooms/:roomId", async (req: Request, res: Response) => {
     }
 
     try {
-        const results = await pool.query("SELECT * FROM Rooms WHERE id = $1 AND creator = $2"
+        const results = await pool.query("SELECT * FROM rooms WHERE id = $1 AND creator = $2"
             , [roomId, user.id]);
         if (results.rows.length > 0) {
-            const deleteResults = await pool.query("Delete FROM Rooms WHERE id = $1 AND creator = $2"
+            const deleteResults = await pool.query("Delete FROM rooms WHERE id = $1 AND creator = $2"
                 , [roomId, user.id]);
             res.status(200).json({message: `Successfully deleted room: ${roomId}`})
             return;
@@ -608,7 +608,7 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
 
     // check db for existing email address
     try {
-        const dbResult = await pool.query("Select (email, id) FROM Users where email = $1",
+        const dbResult = await pool.query("Select (email, id) FROM users where email = $1",
             [userMail]);
         if (dbResult.rows.length > 1){
             res.status(500).json({error: "Email has too many accounts associated."})
@@ -688,27 +688,38 @@ function generatePasswordArray(length: number) {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
     return Array.from({ length }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
 }
-
 async function changePasswordOfUser(user: string, newPassword: string): Promise<ResponseStateAndJson> {
     try {
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-        const dbResponse = await pool.query("UPDATE Users Set pin = $1 WHERE id = $2", [
+        const dbResponse = await pool.query("UPDATE users SET pin = $1 WHERE id = $2 RETURNING *", [
             hashedPassword, user
         ]);
+
+        if (dbResponse.rowCount === 0) {
+            return {
+                state: 404,
+                json: {
+                    error: "User not found"
+                }
+            };
+        }
+
+        return {
+            state: 200,
+            json: {
+                message: "Password successfully updated"
+            }
+        };
     } catch (e) {
+        console.error("Error updating password:", e);
         return {
             state: 500,
             json: {
                 error: "Internal Server Error"
             }
-        }
-    }
-    return {
-        state: 200,
-        json: {message: "Success"}
+        };
     }
 }
-
 
 // server
 
