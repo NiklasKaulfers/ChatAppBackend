@@ -571,7 +571,7 @@ app.post("/api/passwordManagement/changePassword", async (req: Request, res: Res
         return;
     }
 
-    const state = changePasswordOfUser(user.id, newPassword);
+    const state = await changePasswordOfUser(user.id, newPassword);
     if (state.json.error){
         res.status(state.state).json(state.json);
         return;
@@ -619,7 +619,7 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
              return;
         }
         const changedPassword: string = generatePasswordArray(8);
-        const state = changePasswordOfUser(dbResult.rows[0].id, changedPassword);
+        const state = await changePasswordOfUser(dbResult.rows[0].id, changedPassword);
         if (state.json.error){
             res.status(state.state).json(state.json);
             return;
@@ -689,12 +689,12 @@ function generatePasswordArray(length: number) {
     return Array.from({ length }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
 }
 
-function changePasswordOfUser(user: string, newPassword: string): ResponseStateAndJson{
+async function changePasswordOfUser(user: string, newPassword: string): Promise<ResponseStateAndJson> {
     try {
-        const dbResponse = pool.query("UPDATE Users Set pin = $1 WHERE id = $2", [
+        const dbResponse = await pool.query("UPDATE Users Set pin = $1 WHERE id = $2", [
             newPassword, user
         ]);
-    } catch (e){
+    } catch (e) {
         return {
             state: 500,
             json: {
