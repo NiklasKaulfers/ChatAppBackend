@@ -5,7 +5,7 @@ import cors from "cors";
 import jwt from "jsonwebtoken";
 import { v4 as uuidV4 } from "uuid";
 import {checkValidCharsForDB} from "./check-valid-chars-for-db";
-import {Server} from "socket.io";
+import {Server, Socket} from "socket.io";
 import {createServer} from "node:https";
 import Mailjet from "node-mailjet";
 
@@ -804,6 +804,19 @@ async function changePasswordOfUser(user: string, newPassword: string): Promise<
 // having issues rn
 // todo: fix of websocket
 
+interface SocketUser {
+    id: string;
+    roomId: string;
+}
+
+interface AuthenticatedSocket extends Socket {
+    user: SocketUser;
+}
+
+interface RoomUsersMap {
+    [roomId: string]: Set<string>;
+}
+
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
     cors: {
@@ -813,32 +826,95 @@ const io = new Server(httpServer, {
     }
 });
 
-io.on("connection", (socket) => {
-    console.log("Client connected: " + socket.id);
+const roomUsers: RoomUsersMap = {};
 
-    socket.on("joinRoom", ({ roomId }) => {
-        socket.join(roomId);
-        console.log(`User joined room: ${roomId}`);
+io.use((socket: Socket, next) => {
+const token = socket.handshake.auth.token;
+if (!token) {
+    return next(new Error("Authentication error: Token missing"));
+}
+
+try {
+    // Verify the token
+    const decoded = jwt.verify(token, ROOM_SECRET_KEY) as { userId: string, roomId: string };
+    (socket as AuthenticatedSocket).user = {
+        id: decoded.userId,
+        roomId: decoded.roomId
+    };
+    next();
+} catch (error) {
+    console.error("Socket authentication error:", error);
+    next(new Error("Authentication error: Invalid token"));
+}
+});
+
+io.on("connection", (socket: Socket) => {
+    const authenticatedSocket = socket as AuthenticatedSocket;
+    const userId = authenticatedSocket.user.id;
+    const roomId = authenticatedSocket.user.roomId;
+
+    console.log(`Client connected: ${socket.id}, User: ${userId}`);
+
+    socket.join(roomId);
+
+    if (!roomUsers[roomId]) {
+        roomUsers[roomId] = new Set<string>();
+    }
+    roomUsers[roomId].add(userId);
+
+    io.to(roomId).emit("userJoined", {
+        user: userId,
+        activeUsers: Array.from(roomUsers[roomId])
     });
 
-    socket.on("message", ({ token, message, user, roomId }) => {
-        console.log(`Message received from ${user}: ${message}`);
+    socket.on("message", async (data: { message: string }) => {
+        const { message } = data;
 
-        // Broadcast the message to everyone in the same room
-        io.to(roomId).emit("message", { user, message });
+        if (!message || message.trim() === "") {
+            socket.emit("error", { message: "Message cannot be empty" });
+            return;
+        }
+
+        try {
+            io.to(roomId).emit("message", {
+                id: generateRandomId(),
+                user: userId,
+                message,
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            console.error("Error processing message:", error);
+            socket.emit("error", { message: "Failed to process message" });
+        }
+    });
+
+    socket.on("typing", (isTyping: boolean) => {
+        socket.to(roomId).emit("userTyping", {
+            user: userId,
+            isTyping
+        });
     });
 
     socket.on("disconnect", () => {
-        console.log("Client disconnected: " + socket.id);
+        console.log(`Client disconnected: ${socket.id}, User: ${userId}`);
+
+        if (roomUsers[roomId]) {
+            roomUsers[roomId].delete(userId);
+
+            io.to(roomId).emit("userLeft", {
+                user: userId,
+                activeUsers: Array.from(roomUsers[roomId])
+            });
+
+            if (roomUsers[roomId].size === 0) {
+                delete roomUsers[roomId];
+            }
+        }
     });
 });
 
-
-
-app.listen(process.env.PORT, () => {
-    console.log("Server listening")
-})
-
+// Make sure to use the httpServer to listen, not app.listen
 httpServer.listen(process.env.PORT, () => {
-    console.log("Server listening with socket.io support");
+    console.log(`Server listening on port ${process.env.PORT} with socket.io support`);
 });
