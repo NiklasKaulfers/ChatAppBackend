@@ -453,7 +453,7 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
 app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     try {
         const rooms = await pool.query(
-            "Select id,display_name, creator, case when pin is null then 'False' else 'True' end as has_password from rooms"
+                "SELECT id, display_name, creator,(pin IS NOT NULL) AS has_password FROM rooms"
         );
 
         if (!rooms) {
