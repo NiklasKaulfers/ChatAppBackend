@@ -42,9 +42,8 @@ const pool = new pg.Pool({
 const app = express();
 app.use(express.json());
 app.use(cors({
-    // origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com"
-    //     , "https://chat-app-angular-dbba048e2d37.herokuapp.com"],
-    origin: "*",
+    origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com"
+         , "https://chat-app-angular-dbba048e2d37.herokuapp.com"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
     credentials: true,
@@ -61,6 +60,12 @@ const io = new Server(httpServer, {
 });
 
 app.options("*", cors());
+
+
+httpServer.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT} with socket.io support`);
+});
+
 
 const generateRandomId = (): string => uuidV4();
 
@@ -930,15 +935,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     next();
 });
 
-// Error handling middleware with proper TypeScript types
 app.use((err: Error, req: Request, res: Response, next: Function) => {
     console.error(`Server error: ${err.message}`);
     if (!res.headersSent) {
         res.status(500).json({ error: "Internal server error" });
     }
-});
-
-// Make sure to use the httpServer to listen, not app.listen
-httpServer.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT} with socket.io support`);
 });
