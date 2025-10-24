@@ -1,11 +1,10 @@
 import pg from "pg";
-import express, {NextFunction, Request, Response} from "express";
+import express, { NextFunction, Request, Response} from "express";
 import bcrypt from "bcryptjs";
 import cors from "cors";
 import jwt from "jsonwebtoken";
 import { v4 as uuidV4 } from "uuid";
-import {checkValidCharsForDB} from "./check-valid-chars-for-db";
-import {Server, Socket} from "socket.io";
+import {checkValidCharsForDB} from "./security/check-valid-chars-for-db";
 import {createServer} from "node:http";
 import Mailjet from "node-mailjet";
 
@@ -50,14 +49,7 @@ app.use(cors({
     optionsSuccessStatus: 204,
 }));
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-    cors: {
-        origin: ["https://chat-app-iib23-frontend-47fb2c785a51.herokuapp.com"
-            , "https://chat-app-angular-dbba048e2d37.herokuapp.com"],
-        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
-    }
-});
+
 
 app.options("*", cors());
 
@@ -66,8 +58,6 @@ httpServer.listen(PORT, () => {
     console.log(`Server listening on port ${PORT} with socket.io support`);
 });
 
-
-const generateRandomId = (): string => uuidV4();
 
 const generateAccessToken = (userId: string): string => {
     return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
@@ -112,9 +102,6 @@ app.options("*", (req, res) => {
     res.status(204).send();
 });
 
-app.get("/api/status", (req: Request, res: Response): void => {
-    res.json({ status: "Server is running"});
-});
 
 
 //users
@@ -324,7 +311,7 @@ app.post("/api/rooms/verifyUser", async (req: Request, res: Response): Promise<v
 
 app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     const { pin, display_name } = req.body;
-    const roomId = generateRandomId();
+    const roomId = uuidV4();
 
 
     try {
@@ -819,111 +806,6 @@ async function changePasswordOfUser(user: string, newPassword: string): Promise<
 // server
 
 
-// having issues rn
-// todo: fix of websocket
-
-interface SocketUser {
-    id: string;
-    roomId: string;
-}
-
-interface AuthenticatedSocket extends Socket {
-    user: SocketUser;
-}
-
-interface RoomUsersMap {
-    [roomId: string]: Set<string>;
-}
-
-
-
-const roomUsers: RoomUsersMap = {};
-
-io.use((socket: Socket, next) => {
-const token = socket.handshake.auth.token;
-if (!token) {
-    return next(new Error("Authentication error: Token missing"));
-}
-
-try {
-    // Verify the token
-    const decoded = jwt.verify(token, ROOM_SECRET_KEY) as { userId: string, roomId: string };
-    (socket as AuthenticatedSocket).user = {
-        id: decoded.userId,
-        roomId: decoded.roomId
-    };
-    next();
-} catch (error) {
-    console.error("Socket authentication error:", error);
-    next(new Error("Authentication error: Invalid token"));
-}
-});
-
-io.on("connection", (socket: Socket) => {
-    const authenticatedSocket = socket as AuthenticatedSocket;
-    const userId = authenticatedSocket.user.id;
-    const roomId = authenticatedSocket.user.roomId;
-
-    console.log(`Client connected: ${socket.id}, User: ${userId}`);
-
-    socket.join(roomId);
-
-    if (!roomUsers[roomId]) {
-        roomUsers[roomId] = new Set<string>();
-    }
-    roomUsers[roomId].add(userId);
-
-    io.to(roomId).emit("userJoined", {
-        user: userId,
-        activeUsers: Array.from(roomUsers[roomId])
-    });
-
-    socket.on("message", async (data: { message: string }) => {
-        const { message } = data;
-
-        if (!message || message.trim() === "") {
-            socket.emit("error", { message: "Message cannot be empty" });
-            return;
-        }
-
-        try {
-            io.to(roomId).emit("message", {
-                id: generateRandomId(),
-                user: userId,
-                message,
-                timestamp: new Date().toISOString()
-            });
-
-        } catch (error) {
-            console.error("Error processing message:", error);
-            socket.emit("error", { message: "Failed to process message" });
-        }
-    });
-
-    socket.on("typing", (isTyping: boolean) => {
-        socket.to(roomId).emit("userTyping", {
-            user: userId,
-            isTyping
-        });
-    });
-
-    socket.on("disconnect", () => {
-        console.log(`Client disconnected: ${socket.id}, User: ${userId}`);
-
-        if (roomUsers[roomId]) {
-            roomUsers[roomId].delete(userId);
-
-            io.to(roomId).emit("userLeft", {
-                user: userId,
-                activeUsers: Array.from(roomUsers[roomId])
-            });
-
-            if (roomUsers[roomId].size === 0) {
-                delete roomUsers[roomId];
-            }
-        }
-    });
-});
 
 app.use((req: Request, res: Response, next: NextFunction) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
