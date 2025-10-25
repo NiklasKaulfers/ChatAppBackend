@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import {Response, Request} from "express";
+import {Response} from "express";
 import DatabaseHandler from "../database-handler/database-entry";
 import {DATABASE_NAMING} from "../database-handler/database-naming-definitions";
 

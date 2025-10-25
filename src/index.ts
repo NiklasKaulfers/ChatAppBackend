@@ -7,6 +7,7 @@ import { v4 as uuidV4 } from "uuid";
 import {checkValidCharsForDB} from "./security/check-valid-chars-for-db";
 import {createServer} from "node:http";
 import Mailjet from "node-mailjet";
+import {generateAccessToken, generateRefreshToken} from "./security/jwt-methods";
 
 const MAILJET_API_KEY = process.env.MAILJET_API_KEY;
 const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVATE_KEY;
@@ -59,28 +60,15 @@ httpServer.listen(PORT, () => {
 });
 
 
-const generateAccessToken = (userId: string): string => {
-    return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
-};
-
-const generateRefreshToken = (userId: string): string => {
-    return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
-};
-
-
 const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
-    // Trim the input password to remove any accidental whitespace
-    const cleanPassword = inputPassword.trim();
 
     try {
-        // Try the async compare first
-        return await bcrypt.compare(cleanPassword, storedPassword);
+        return await bcrypt.compare(inputPassword, storedPassword);
     } catch (err) {
         console.error("Async bcrypt compare failed, trying sync compare:", err);
 
-        // Fall back to sync compare if the async one fails
         try {
-            return bcrypt.compareSync(cleanPassword, storedPassword);
+            return bcrypt.compareSync(inputPassword, storedPassword);
         } catch (syncErr) {
             console.error("Both async and sync bcrypt compare failed:", syncErr);
             return false;
@@ -242,7 +230,11 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
         }
 
         console.log(`Login successful for user ${username}`);
-        const accessToken: string = generateAccessToken(user.id);
+        const accessToken: string = generateAccessToken({
+            userId: user.id,
+            expiry: "2h",
+            jwtSecret: JWT_SECRET
+        });
         const refreshToken: string = generateRefreshToken(user.id);
         refreshTokens[user.id] = refreshToken;
         res.status(200).json({
@@ -275,7 +267,11 @@ app.post("/api/tokenRefresh", (req: Request, res: Response): void => {
             return;
         }
 
-        const newAccessToken = generateAccessToken(userId);
+        const newAccessToken = generateAccessToken({
+            userId: userId,
+            expiry: "2h",
+            jwtSecret: JWT_SECRET
+        });
         res.status(200).json({ message: "Token refreshed successfully", accessToken: newAccessToken });
     } catch (err) {
         console.error(err);

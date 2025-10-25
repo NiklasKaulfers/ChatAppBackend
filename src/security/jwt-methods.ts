@@ -7,10 +7,10 @@ interface GenerateTokenInput  {
     jwtSecret: string;
 }
 
-const generateAccessToken = (input: GenerateTokenInput): string => {
+export const generateAccessToken = (input: GenerateTokenInput): string => {
     return jwt.sign({ id: input.userId }, input.jwtSecret, { expiresIn: input.expiry });
 };
 
-const generateRefreshToken = (input: GenerateTokenInput): string => {
+export const generateRefreshToken = (input: GenerateTokenInput): string => {
     return jwt.sign({ id: input.userId }, input.jwtSecret, { expiresIn: input.expiry });
 };
