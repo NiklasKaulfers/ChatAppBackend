@@ -13,12 +13,27 @@ export default class User {
     constructor(props: UserProps) {
         this.userName = props.userName;
         this.password = props.password;
-        this.email = this.validEmail(props.email)
-        ;
+        this.email = this.validEmail(props.email);
     }
 
 
     private validEmail(uncheckedEmail: string): string{
         return this.email
+    }
+
+    dto(){
+        return {
+            userName: this.userName,
+            password: this.password,
+            email: this.email,
+        }
+    }
+
+    getUserName(){
+        return this.userName;
+    }
+
+    getEmail(){
+        return this.email;
     }
 }

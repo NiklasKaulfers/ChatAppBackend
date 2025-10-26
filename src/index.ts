@@ -8,6 +8,8 @@ import {checkValidCharsForDB} from "./security/check-valid-chars-for-db";
 import {createServer} from "node:http";
 import Mailjet from "node-mailjet";
 import {generateAccessToken, generateRefreshToken} from "./security/jwt-methods";
+import {postUsers} from "./request-handler/post-users";
+import DatabaseHandler from "./database-handler/database-entry";
 
 const MAILJET_API_KEY = process.env.MAILJET_API_KEY;
 const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVATE_KEY;
@@ -39,6 +41,8 @@ const pool = new pg.Pool({
     ssl: { rejectUnauthorized: false },
 });
 
+const dbHandler = new DatabaseHandler()
+
 const app = express();
 app.use(express.json());
 app.use(cors({
@@ -60,30 +64,6 @@ httpServer.listen(PORT, () => {
 });
 
 
-const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
-
-    try {
-        return await bcrypt.compare(inputPassword, storedPassword);
-    } catch (err) {
-        console.error("Async bcrypt compare failed, trying sync compare:", err);
-
-        try {
-            return bcrypt.compareSync(inputPassword, storedPassword);
-        } catch (syncErr) {
-            console.error("Both async and sync bcrypt compare failed:", syncErr);
-            return false;
-        }
-    }
-};
-
-/*
-
-
-            API Endpoints
-
-
- */
-
 
 app.options("*", (req, res) => {
     console.log(`Received OPTIONS request for ${req.path}`);
@@ -96,21 +76,12 @@ app.options("*", (req, res) => {
 
 
 app.post("/api/users", async (req: Request, res: Response) => {
-    const { user, email, password } = req.body;
-
-    if (!user || !email || !password) {
-        res.status(400).json({ error: "User, email, and password are required." });
-        return;
-    }
-
-    try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await pool.query("INSERT INTO users (id, email, pin) VALUES ($1, $2, $3)", [user, email, hashedPassword]);
-        res.status(201).json({ message: `User ${user} has been created.` });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Database error occurred." });
-    }
+    res = await postUsers({
+        databaseHandler: dbHandler,
+        body: req.body,
+        res: res
+    })
+    return;
 });
 
 app.get("/api/users/:userId", async (req: Request, res: Response) => {

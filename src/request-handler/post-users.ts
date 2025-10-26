@@ -1,7 +1,8 @@
 import bcrypt from "bcryptjs";
 import {Response} from "express";
 import DatabaseHandler from "../database-handler/database-entry";
-import {DATABASE_NAMING} from "../database-handler/database-naming-definitions";
+import {attributeNotExists} from "../database-handler/dynamoDb-condition-expression";
+import User from "../user";
 
 
 interface PostUserProps {
@@ -11,30 +12,24 @@ interface PostUserProps {
 }
 
 export async function postUsers(props: PostUserProps): Promise<Response> {
-    const userData: PostUsersRequiredInput = validateBody(props.body);
+    const user: User = await validateBody(props.body);
     try {
-        const hashedPassword = await bcrypt.hash(userData.password, 10);
-        await props.databaseHandler.databaseEntry({
-                values: [
-                    {
-                        value: userData.userName,
-                        key: DATABASE_NAMING.USER_TABLE.USERNAME
-                    }, {
-                        value: hashedPassword,
-                        key: DATABASE_NAMING.USER_TABLE.PASSWORD
-                    }, {
-                        value: userData.email,
-                        key: DATABASE_NAMING.USER_TABLE.EMAIL
-                    }
-                ]
+        const dbResponse = await props.databaseHandler.sendPutCommand({
+                Item: user.dto(),
+                ConditionExpression: attributeNotExists("email"),
+                TableName: "we3-user"
             }
         )
-        props.res.status(201).json({message: `User ${userData.userName} has been created.`});
+        if (dbResponse.$metadata.httpStatusCode == 200) {
+            props.res.status(201).json({message: `User ${user.getUserName()} has been created.`});
+            return props.res;
+        }
+        props.res.status(400).json({message: `User already exists for given email: ${user.getEmail()}`});
+        return props.res;
     } catch (err) {
         console.error(err);
-        props.res.status(500).json({error: "Database error occurred."});
+        return props.res.status(500).json({error: "Database error occurred."});
     }
-    return props.res;
 }
 
 interface PostUsersRequiredInput {
@@ -43,7 +38,7 @@ interface PostUsersRequiredInput {
     password: string
 }
 
-function validateBody(body: any): PostUsersRequiredInput {
+async function validateBody(body: any): Promise<User> {
     const input: PostUsersRequiredInput = body;
 
     if (!input.userName && !input.email && !input.password) throw new Error("No parameters passed")
@@ -52,5 +47,7 @@ function validateBody(body: any): PostUsersRequiredInput {
     if (!input.email) throw new Error("Undefined email")
     if (!input.password) throw new Error("Undefined password")
 
-    return input;
+    input.password = await bcrypt.hash(input.password, 10);
+
+    return new User(input);
 }
