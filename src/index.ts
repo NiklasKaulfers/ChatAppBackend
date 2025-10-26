@@ -17,6 +17,10 @@ const CHAT_EMAIL = process.env.EMAIL;
 const ROOM_SECRET_KEY = process.env.ROOM_SECRET_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 const HANDSHAKE_KEY = process.env.HANDSHAKE_KEY;
+if (!ROOM_SECRET_KEY) {
+    throw new Error("ROOM_SECRET_KEY environment variable doesn't exist");
+}
+
 if (!JWT_SECRET
     || !process.env.DATABASE_URL
     || !ROOM_SECRET_KEY
@@ -76,7 +80,6 @@ app.post("/api/users", async (req: Request, res: Response) => {
         body: req.body,
         res: res
     })
-    return;
 });
 
 app.get("/api/users/:userId", async (req: Request, res: Response) => {
@@ -163,8 +166,8 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
         try {
             passwordMatch = await bcrypt.compare(password, storedHash);
             console.log(`Standard bcrypt compare result: ${passwordMatch}`);
-        } catch (compareErr) {
-            console.error("Error during bcrypt compare:", compareErr);
+        } catch (error) {
+            console.error("Error during bcrypt compare:", error);
         }
 
         // Approach 2: If standard compare fails, try with trimmed password
@@ -400,7 +403,6 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
         message: "Joined room: " + roomId,
         roomToken: roomToken
     })
-    return;
 })
 
 
