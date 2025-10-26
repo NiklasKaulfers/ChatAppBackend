@@ -1,9 +1,9 @@
 import pg from "pg";
-import express, { NextFunction, Request, Response} from "express";
+import express, {NextFunction, Request, Response} from "express";
 import bcrypt from "bcryptjs";
 import cors from "cors";
 import jwt from "jsonwebtoken";
-import { v4 as uuidV4 } from "uuid";
+import {v4 as uuidV4} from "uuid";
 import {checkValidCharsForDB} from "./security/check-valid-chars-for-db";
 import {createServer} from "node:http";
 import Mailjet from "node-mailjet";
@@ -30,24 +30,19 @@ if (!JWT_SECRET
 
 
 const PORT = process.env.PORT || 3000;
-const ACCESS_TOKEN_EXPIRY = "2h";
-const REFRESH_TOKEN_EXPIRY = "7d";
 const ROOM_SECRET_EXPIRY = "2h";
 // todo: this bad bad, add to db eventually
 const refreshTokens: Record<string, string> = {};
 
 const pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
+    ssl: {rejectUnauthorized: false},
 });
 
 const dbHandler = new DatabaseHandler()
 
 const app = express();
 app.use(express.json());
-
-// todo: limit access during prod
-// currently nothing rly active anyways
 app.use(cors({
     origin: ["*"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -66,12 +61,10 @@ httpServer.listen(PORT, () => {
 });
 
 
-
 app.options("*", (req, res) => {
     console.log(`Received OPTIONS request for ${req.path}`);
     res.status(204).send();
 });
-
 
 
 //users
@@ -88,21 +81,21 @@ app.post("/api/users", async (req: Request, res: Response) => {
 
 app.get("/api/users/:userId", async (req: Request, res: Response) => {
     const auth: string | undefined = req.headers.authorization?.split(" ")[1];
-    if (!auth){
+    if (!auth) {
         res.status(403).json({error: "Authorization missing."})
-        return ;
+        return;
     }
     try {
         console.log("Attempting to verify token")
-        const user = jwt.verify(auth, JWT_SECRET) as {id: string};
-        if (!user){
+        const user = jwt.verify(auth, JWT_SECRET) as { id: string };
+        if (!user) {
             res.status(403).json({error: "Invalid token."})
-            return ;
+            return;
         }
         try {
             const dbResult = await pool.query("SELECT id, email FROM users WHERE id = $1", [user.id]);
 
-            if (dbResult.rows.length !== 1){
+            if (dbResult.rows.length !== 1) {
                 res.status(404).json({error: "User not found."});
                 return;
             }
@@ -110,7 +103,7 @@ app.get("/api/users/:userId", async (req: Request, res: Response) => {
                 id: dbResult.rows[0].id,
                 email: dbResult.rows[0].email
             });
-        } catch (e){
+        } catch (e) {
             console.log("API Call users/:userId caused an error in the database.", e)
             res.status(500).json({error: "Internal Server error."});
             return;
@@ -139,7 +132,7 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
 
     if (!username || !password) {
         console.log("Login failed: Missing username or password");
-        res.status(400).json({ error: "Username and password are required." });
+        res.status(400).json({error: "Username and password are required."});
         return;
     }
 
@@ -149,7 +142,7 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
         const result = await pool.query("SELECT id, pin FROM users WHERE id = $1", [username]);
         if (result.rows.length === 0) {
             console.log(`Login failed: No user found with username ${username}`);
-            res.status(404).json({ error: "No user found." });
+            res.status(404).json({error: "No user found."});
             return;
         }
 
@@ -198,7 +191,7 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
 
         if (!passwordMatch) {
             console.log(`Login failed: Invalid password for user ${username}`);
-            res.status(403).json({ error: "Invalid password." });
+            res.status(403).json({error: "Invalid password."});
             return;
         }
 
@@ -217,17 +210,17 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
         });
     } catch (err) {
         console.error(`Login error for user ${username}:`, err);
-        res.status(500).json({ error: "Database error occurred." });
+        res.status(500).json({error: "Database error occurred."});
     }
 });
 
 // token
 
 app.post("/api/tokenRefresh", (req: Request, res: Response): void => {
-    const { refreshToken } = req.body;
+    const {refreshToken} = req.body;
 
     if (!refreshToken) {
-        res.status(400).json({ error: "Refresh token is required." });
+        res.status(400).json({error: "Refresh token is required."});
         return;
     }
 
@@ -236,7 +229,7 @@ app.post("/api/tokenRefresh", (req: Request, res: Response): void => {
         const userId = decoded.id;
 
         if (refreshTokens[userId] !== refreshToken) {
-            res.status(403).json({ error: "Invalid or expired refresh token." });
+            res.status(403).json({error: "Invalid or expired refresh token."});
             return;
         }
 
@@ -245,10 +238,10 @@ app.post("/api/tokenRefresh", (req: Request, res: Response): void => {
             expiry: "2h",
             jwtSecret: JWT_SECRET
         });
-        res.status(200).json({ message: "Token refreshed successfully", accessToken: newAccessToken });
+        res.status(200).json({message: "Token refreshed successfully", accessToken: newAccessToken});
     } catch (err) {
         console.error(err);
-        res.status(403).json({ error: "Invalid or expired refresh token." });
+        res.status(403).json({error: "Invalid or expired refresh token."});
     }
 });
 
@@ -259,19 +252,19 @@ app.post("/api/rooms/verifyUser", async (req: Request, res: Response): Promise<v
     const roomToken: string | undefined = req.body.roomtoken;
     const room: string | undefined = req.body.room;
     if (!roomToken) {
-        res.status(400).json({ error: "Room token is required." });
+        res.status(400).json({error: "Room token is required."});
         return;
     }
-    const auth = jwt.verify(roomToken, JWT_SECRET) as {roomId: string, userId: string};
+    const auth = jwt.verify(roomToken, JWT_SECRET) as { roomId: string, userId: string };
     if (auth && room === auth.roomId) {
-        res.status(200).json({ message: "Successfully verified user." });
+        res.status(200).json({message: "Successfully verified user."});
         return;
     }
-    if (!auth){
-        res.status(403).json({ error: "Invalid or expired token." });
+    if (!auth) {
+        res.status(403).json({error: "Invalid or expired token."});
     }
     if (room !== auth.roomId) {
-        res.status(403).json({ error: "Verification not for this room." });
+        res.status(403).json({error: "Verification not for this room."});
     }
 })
 
@@ -279,7 +272,7 @@ app.post("/api/rooms/verifyUser", async (req: Request, res: Response): Promise<v
 
 
 app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
-    const { pin, display_name } = req.body;
+    const {pin, display_name} = req.body;
     const roomId = uuidV4();
 
 
@@ -287,7 +280,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
         const token: string | undefined = req.headers.authorization?.split(" ")[1];
 
         if (!token) {
-            res.status(400).json({ error: "Authorization token is required." })
+            res.status(400).json({error: "Authorization token is required."})
             return;
         }
 
@@ -298,7 +291,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 
             const userResult = await pool.query("SELECT id FROM users WHERE id = $1", [userId]);
             if (userResult.rows.length === 0) {
-                res.status(404).json({ error: "User not found." });
+                res.status(404).json({error: "User not found."});
                 return;
             } else {
                 userId = userResult.rows[0].id;
@@ -308,7 +301,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
                 && checkValidCharsForDB(display_name)
                 && checkValidCharsForDB(roomId);
             if (!allCharactersValid) {
-                res.status(403).json({ error: "Uses invalid characters." });
+                res.status(403).json({error: "Uses invalid characters."});
                 return;
             }
 
@@ -327,7 +320,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
         } catch (err) {
             console.error(err);
             res.status(403).json({error: "Invalid or expired token."});
-            return ;
+            return;
         }
     } catch (err) {
         console.error(err);
@@ -338,36 +331,36 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 
 app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
     const pin: string | null = req.body.pin;
-    const auth: string| undefined = req.headers.authorization?.split(" ")[1];
-    let room ;
-    if (!auth){
+    const auth: string | undefined = req.headers.authorization?.split(" ")[1];
+    let room;
+    if (!auth) {
         res.status(403).json({error: "Authorization missing."});
         return;
     }
     //Checking auth.
-    let userConfirm: {id: string};
+    let userConfirm: { id: string };
     try {
         userConfirm = jwt.verify(auth, JWT_SECRET) as { id: string };
-    } catch (err){
+    } catch (err) {
         console.error("Caught error with jwt verify.")
         res.status(500).json({error: "Error verifying"});
         return;
     }
-    if (!userConfirm){
+    if (!userConfirm) {
         res.status(403).json({error: "Invalid jwt token."});
         return;
     }
-    const { roomId } = req.params;
+    const {roomId} = req.params;
 
     if (!checkValidCharsForDB(roomId)) {
-        res.status(403).json({ error: "Invalid chars." });
+        res.status(403).json({error: "Invalid chars."});
         return;
     }
 
     try {
         const result =
             await pool.query("Select id, pin, creator from rooms WHERE id = $1", [roomId]);
-        if (result.rows.length === 0){
+        if (result.rows.length === 0) {
             res.status(404).json({error: "Room not found."});
             return;
         }
@@ -383,7 +376,7 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
         , ROOM_SECRET_KEY
         , {expiresIn: ROOM_SECRET_EXPIRY});
     //Checking if pin is needed.
-    if (room.pin === null){
+    if (room.pin === null) {
         console.log("Success.")
         res.status(200).json({
             message: "Joined room: " + roomId,
@@ -392,13 +385,13 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
         return;
     }
     //Requiring pin.
-    if (pin === null){
+    if (pin === null) {
         res.status(403).json("This room is pin protected, provide a pin.");
         return;
     }
     //Checking with db if its the right key.
     const roomPin = await bcrypt.compare(pin, room.pin);
-    if (!roomPin){
+    if (!roomPin) {
         res.status(403).json({error: "Invalid Password"});
         return;
     }
@@ -414,36 +407,36 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
 app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     try {
         const rooms = await pool.query(
-                "SELECT id, display_name, creator,(pin IS NOT NULL) AS has_password FROM rooms"
+            "SELECT id, display_name, creator,(pin IS NOT NULL) AS has_password FROM rooms"
         );
 
         if (!rooms) {
-            res.status(200).json({ message: "No rooms found.", ids: [] });
+            res.status(200).json({message: "No rooms found.", ids: []});
             return;
         }
 
-        res.status(200).json({ rooms: rooms.rows });
+        res.status(200).json({rooms: rooms.rows});
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Database error occurred." });
+        res.status(500).json({error: "Database error occurred."});
     }
 });
 
 app.get("/api/rooms/ownedByUser", async (req: Request, res: Response): Promise<void> => {
     const auth: string | undefined = req.headers.authorization?.split(" ")[1];
-    if (!auth){
+    if (!auth) {
         res.status(403).json({error: "Authorization missing."})
-        return ;
+        return;
     }
     const verify = verifyToken(auth);
-    if (!verify){
+    if (!verify) {
         res.status(403).json({error: "Illegal login"});
         return;
     }
-    const user = jwt.verify(auth, JWT_SECRET) as {id: string};
-    if (!user){
+    const user = jwt.verify(auth, JWT_SECRET) as { id: string };
+    if (!user) {
         res.status(403).json({error: "Authorization missing."})
-        return ;
+        return;
     }
 
     try {
@@ -452,21 +445,21 @@ app.get("/api/rooms/ownedByUser", async (req: Request, res: Response): Promise<v
             + "where creator = $1", [user.id]
         );
         if (!rooms) {
-            res.status(200).json({ message: "No rooms found.", ids: [] });
+            res.status(200).json({message: "No rooms found.", ids: []});
             return;
         }
 
-        res.status(200).json({ rooms: rooms.rows });
+        res.status(200).json({rooms: rooms.rows});
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Database error occurred." });
+        res.status(500).json({error: "Database error occurred."});
     }
 })
 
 app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void> => {
-    const { roomId } = req.params;
+    const {roomId} = req.params;
     const checkForDbManipulation = checkValidCharsForDB(roomId);
-    if (!checkForDbManipulation){
+    if (!checkForDbManipulation) {
         res.status(403).json({error: "Invalid characters in request."});
         return;
     }
@@ -475,13 +468,13 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
             await pool.query("SELECT id, display_name, creator FROM rooms WHERE id = $1"
                 , [roomId]);
         if (result.rows.length > 0) {
-            res.status(200).json({ room: result.rows[0] });
+            res.status(200).json({room: result.rows[0]});
         } else {
-            res.status(404).json({ error: "Room not found." });
+            res.status(404).json({error: "Room not found."});
         }
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: "Database error occurred." });
+        res.status(500).json({error: "Database error occurred."});
     }
 })
 
@@ -490,13 +483,13 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
  * req.headers.authorization: the user verification of the owner of that room
  */
 app.delete("/api/rooms/:roomId", async (req: Request, res: Response) => {
-    const { roomId } = req.params;
+    const {roomId} = req.params;
     const checkValidityOfChars = checkValidCharsForDB(roomId);
-    if (!checkValidityOfChars){
+    if (!checkValidityOfChars) {
         res.status(403).json({error: "Invalid characters in request."});
         return;
     }
-    if (!req.headers.authorization){
+    if (!req.headers.authorization) {
         res.status(403).json({error: "Authorization missing."});
         return;
     }
@@ -504,17 +497,17 @@ app.delete("/api/rooms/:roomId", async (req: Request, res: Response) => {
 
     let user = null;
     const verify = verifyToken(auth);
-    if (!verify){
+    if (!verify) {
         res.status(403).json({error: "Illegal login"});
         return;
     }
     try {
-         user = jwt.verify(auth, JWT_SECRET) as { id: string };
-    } catch (err:any){
+        user = jwt.verify(auth, JWT_SECRET) as { id: string };
+    } catch (err: any) {
         res.status(403).json({error: "User is not authorized."});
         return;
     }
-    if (!user){
+    if (!user) {
         res.status(500).json({error: "Error verifying"});
     }
 
@@ -529,7 +522,7 @@ app.delete("/api/rooms/:roomId", async (req: Request, res: Response) => {
         }
         res.status(404).json({error: "Room not found."});
         return
-    } catch (e: any){
+    } catch (e: any) {
         res.status(500).json({error: "Database error occurred."});
         return;
     }
@@ -543,20 +536,20 @@ app.get("/socket.io/", (req, res) => {
 app.post("/api/messages", async (req: Request, res: Response): Promise<void> => {
     const message = req.body.message;
 
-    if (!message){
+    if (!message) {
         res.status(400).json({error: "Missing a message."});
         return;
     }
 
-    if (!req.headers.authorization){
+    if (!req.headers.authorization) {
         res.status(403).json({error: "Authorization missing."});
         return;
     }
 
-    const verify  =
-        jwt.verify(req.headers.authorization, JWT_SECRET) as {userId: string, roomId: string};
+    const verify =
+        jwt.verify(req.headers.authorization, JWT_SECRET) as { userId: string, roomId: string };
 
-    if (!verify){
+    if (!verify) {
         res.status(403).json({error: "Invalid verify token."});
         return;
     }
@@ -565,7 +558,7 @@ app.post("/api/messages", async (req: Request, res: Response): Promise<void> => 
     const room: string = verify.roomId;
     // todo work in process
     const sendMessage = ""
-    if (!sendMessage){
+    if (!sendMessage) {
         res.status(500).json({error: "Could not post message to aws."});
         return;
     }
@@ -574,37 +567,37 @@ app.post("/api/messages", async (req: Request, res: Response): Promise<void> => 
 
 app.post("/api/passwordManagement/changePassword", async (req: Request, res: Response): Promise<void> => {
     const auth: string | undefined = req.headers.authorization?.split(" ")[1];
-    if (!auth){
+    if (!auth) {
         res.status(403).json({error: "Authorization is missing."})
-        return ;
+        return;
     }
     const verify = verifyToken(auth);
-    if (!verify){
+    if (!verify) {
         res.status(403).json({error: "Illegal login"});
         return;
     }
     const newPassword: string | undefined = req.body.newPassword;
-    if (!newPassword){
+    if (!newPassword) {
         res.status(400).json({error: "Credentials for update are missing."})
-        return ;
+        return;
     }
-    const user = jwt.verify(auth as string, JWT_SECRET) as {id:string};
-    if (!user){
+    const user = jwt.verify(auth as string, JWT_SECRET) as { id: string };
+    if (!user) {
         res.status(403).json({error: "Invalid verify token."});
         return;
     }
 
-    if (!checkValidCharsForDB(newPassword)){
+    if (!checkValidCharsForDB(newPassword)) {
         res.status(400).json({error: "Invalid characters"});
         return;
     }
 
     const state = await changePasswordOfUser(user.id, newPassword);
-    if (state.json.error){
+    if (state.json.error) {
         res.status(state.state).json(state.json);
         return;
     }
-    if (state.json.message){
+    if (state.json.message) {
         res.status(state.state).json(state.json);
         return;
     }
@@ -619,13 +612,13 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
 
     if (!userMail) {
         console.log("Password reset failed: Email is missing");
-        res.status(400).json({ error: "Email is missing." });
+        res.status(400).json({error: "Email is missing."});
         return;
     }
 
     if (!checkValidCharsForDB(userMail)) {
         console.log(`Password reset failed: Invalid characters in email: ${userMail}`);
-        res.status(400).json({ error: "Invalid characters in email." });
+        res.status(400).json({error: "Invalid characters in email."});
         return;
     }
 
@@ -635,7 +628,7 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
 
         if (dbResult.rows.length !== 1) {
             console.log(`Password reset failed: Email not found or has multiple accounts: ${userMail}`);
-            res.status(404).json({ error: "Email not found or has multiple accounts." });
+            res.status(404).json({error: "Email not found or has multiple accounts."});
             return;
         }
 
@@ -668,12 +661,12 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
         `;
 
         console.log(`Sending password reset email to: ${userMail}`);
-        const mailjet = new Mailjet({ apiKey: MAILJET_API_KEY, apiSecret: MAILJET_PRIVATE_KEY });
-        const mailJetRequest = await mailjet.post("send", { version: "v3.1" }).request({
+        const mailjet = new Mailjet({apiKey: MAILJET_API_KEY, apiSecret: MAILJET_PRIVATE_KEY});
+        const mailJetRequest = await mailjet.post("send", {version: "v3.1"}).request({
             Messages: [
                 {
-                    From: { Email: CHAT_EMAIL, Name: "HSZG Chat App" },
-                    To: [{ Email: userMail }],
+                    From: {Email: CHAT_EMAIL, Name: "HSZG Chat App"},
+                    To: [{Email: userMail}],
                     Subject: "Password Reset for your HSZG Chat App Account",
                     TextPart: `Your new password is: ${changedPassword}`,
                     HTMLPart: emailBody
@@ -683,22 +676,22 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
 
         if (mailJetRequest.response.status === 200) {
             console.log(`Password reset email sent successfully to: ${userMail}`);
-            res.status(200).json({ message: `Email sent to ${userMail}` });
+            res.status(200).json({message: `Email sent to ${userMail}`});
             return;
         } else {
             console.error("MailJet error:", mailJetRequest.response);
-            res.status(500).json({ error: "Failed to send email." });
+            res.status(500).json({error: "Failed to send email."});
             return;
         }
 
     } catch (err) {
         console.error("Password reset - Database or processing error:", err);
-        res.status(500).json({ error: "Internal Server error" });
+        res.status(500).json({error: "Internal Server error"});
         return;
     }
 });
 
-interface ResponseStateAndJson{
+interface ResponseStateAndJson {
     state: number,
     json: {
         message?: string,
@@ -707,13 +700,13 @@ interface ResponseStateAndJson{
 }
 
 
-
 function generatePasswordArray(length: number) {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const password = Array.from({ length }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
+    const password = Array.from({length}, () => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
     console.log(`Generated password length: ${password.length}`);
     return password;
 }
+
 const verifyToken = (token: string) => {
     try {
         return jwt.verify(token, JWT_SECRET);
@@ -722,6 +715,7 @@ const verifyToken = (token: string) => {
         return null;
     }
 };
+
 async function changePasswordOfUser(user: string, newPassword: string): Promise<ResponseStateAndJson> {
     try {
         console.log(`Changing password for user: ${user}`);
@@ -743,7 +737,7 @@ async function changePasswordOfUser(user: string, newPassword: string): Promise<
             console.error("Generated hash failed immediate verification!");
             return {
                 state: 500,
-                json: { error: "Password hashing verification failed" }
+                json: {error: "Password hashing verification failed"}
             };
         }
 
@@ -755,31 +749,31 @@ async function changePasswordOfUser(user: string, newPassword: string): Promise<
             console.log(`Password change failed: User ${user} not found`);
             return {
                 state: 404,
-                json: { error: "User not found" }
+                json: {error: "User not found"}
             };
         }
 
         console.log(`Password successfully updated for user: ${user}`);
         return {
             state: 200,
-            json: { message: "Password successfully updated" }
+            json: {message: "Password successfully updated"}
         };
     } catch (e) {
         console.error(`Error updating password for user ${user}:`, e);
         return {
             state: 500,
-            json: { error: "Internal Server Error" }
+            json: {error: "Internal Server Error"}
         };
     }
 }
-// server
 
+// server
 
 
 app.use((req: Request, res: Response, next: NextFunction) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
     const originalSend = res.send;
-    res.send = function(body) {
+    res.send = function (body) {
         console.log(`${new Date().toISOString()} - Response ${res.statusCode} for ${req.method} ${req.url}`);
         return originalSend.call(this, body);
     };
@@ -789,6 +783,6 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.use((err: Error, req: Request, res: Response, next: Function) => {
     console.error(`Server error: ${err.message}`);
     if (!res.headersSent) {
-        res.status(500).json({ error: "Internal server error" });
+        res.status(500).json({error: "Internal server error"});
     }
 });
