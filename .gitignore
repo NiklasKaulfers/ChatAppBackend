@@ -31,3 +31,6 @@ bin/
 
 ### Node Modules ###
 /node_modules/
+
+### node stuff
+package-lock.json
