@@ -10,6 +10,7 @@ import Mailjet from "node-mailjet";
 import {generateAccessToken, generateRefreshToken} from "./security/jwt-methods";
 import {postUsers} from "./request-handler/post-users";
 import DatabaseHandler from "./database-handler/database-entry";
+import { secret } from '@aws-amplify/backend'
 
 const MAILJET_API_KEY = process.env.MAILJET_API_KEY;
 const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVATE_KEY;
@@ -17,6 +18,10 @@ const CHAT_EMAIL = process.env.EMAIL;
 const ROOM_SECRET_KEY = process.env.ROOM_SECRET_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 const HANDSHAKE_KEY = process.env.HANDSHAKE_KEY;
+if (!secret("ROOM_SECRET_KEY")){
+    throw new Error("ROOM_SECRET_KEY env in amplify missing");
+}
+
 if (!ROOM_SECRET_KEY) {
     throw new Error("ROOM_SECRET_KEY environment variable doesn't exist");
 }
