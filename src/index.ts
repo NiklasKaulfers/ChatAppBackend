@@ -144,11 +144,15 @@ app.post("/api/users", async (req: Request, res: Response) => {
 
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const {error} = await supabase.from("users").insert([{id: user, email: email, pin: hashedPassword}]);
+    const {error, data} = await supabase.from("users").insert([{id: user, email: email, pin: hashedPassword}]).select();
     res.status(201).json({message: `User ${user} has been created.`});
     if (error) {
         console.error(error);
         res.status(500).json({error: "Database error occurred."});
+    }
+    if (!data || !data[0].id){
+        res.status(500).json({error: "User creation failed."});
+        return;
     }
 });
 
