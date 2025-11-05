@@ -42,17 +42,7 @@ const refreshTokens: Record<string, string> = {};
 
 const supabase = createClient(
     SUPABASE_URL,
-    SUPABASE_KEY,
-    {
-        db: {
-            schema: "public"
-        },
-        auth: {
-            autoRefreshToken: true,
-            persistSession: true,
-            detectSessionInUrl: true
-        },
-    }
+    SUPABASE_KEY
 )
 
 const app = express();
