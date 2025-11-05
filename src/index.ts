@@ -42,7 +42,7 @@ const pool = new pg.Pool({
 const app = express();
 app.use(express.json());
 app.use(cors({
-    origin: ["chat-app-angular-flax.vercel.app"],
+    origin: ["https://chat-app-angular-flax.vercel.app"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
     credentials: true,
@@ -51,7 +51,7 @@ app.use(cors({
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
     cors: {
-        origin: ["chat-app-angular-flax.vercel.app"],
+        origin: ["https://chat-app-angular-flax.vercel.app"],
         methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allowedHeaders: ["Authorization", "Content-Type", "Access-Control-Allow-Origin"],
     }
