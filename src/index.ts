@@ -142,13 +142,12 @@ app.post("/api/users", async (req: Request, res: Response) => {
         return;
     }
 
-    try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await supabase.from("users").insert([{id: user, email: email, pin: hashedPassword}]);
-        //await pool.query("INSERT INTO users (id, email, pin) VALUES ($1, $2, $3)", [user, email, hashedPassword]);
-        res.status(201).json({message: `User ${user} has been created.`});
-    } catch (err) {
-        console.error(err);
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const {error} = await supabase.from("users").insert([{id: user, email: email, pin: hashedPassword}]);
+    res.status(201).json({message: `User ${user} has been created.`});
+    if (error) {
+        console.error(error);
         res.status(500).json({error: "Database error occurred."});
     }
 });
@@ -168,7 +167,7 @@ app.get("/api/users/:userId", async (req: Request, res: Response) => {
         }
         try {
             // { changed code }
-            const { data, error } = await supabase
+            const {data, error} = await supabase
                 .from("users")
                 .select("id, email")
                 .eq("id", user.id)
@@ -225,7 +224,7 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
     try {
         console.log(`Finding user with username: ${username}`);
         // { changed code }
-        const { data, error } = await supabase
+        const {data, error} = await supabase
             .from("users")
             .select("id, pin")
             .eq("id", username)
@@ -379,7 +378,7 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
 
 
             // { changed code: check user exists via supabase }
-            const { data: userData, error: userError } = await supabase
+            const {data: userData, error: userError} = await supabase
                 .from("users")
                 .select("id")
                 .eq("id", userId)
@@ -404,7 +403,12 @@ app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
                 await supabase.from("rooms").insert([{id: roomId, display_name: display_name, creator: userId}]);
             } else {
                 const hashedPassword = await bcrypt.hash(pin, 10);
-                await supabase.from("rooms").insert([{id: roomId, display_name: display_name, pin: hashedPassword, creator: userId}]);
+                await supabase.from("rooms").insert([{
+                    id: roomId,
+                    display_name: display_name,
+                    pin: hashedPassword,
+                    creator: userId
+                }]);
             }
 
             res.status(201).json({message: `Room ${roomId} created with display name ${display_name}.`});
@@ -451,7 +455,7 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
 
     try {
         // { changed code }
-        const { data: roomData, error: roomError } = await supabase
+        const {data: roomData, error: roomError} = await supabase
             .from("rooms")
             .select("id, pin, creator")
             .eq("id", roomId)
@@ -510,7 +514,7 @@ app.post("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void
 app.get("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     try {
         // { changed code: fetch rooms and compute has_password client-side }
-        const { data, error } = await supabase
+        const {data, error} = await supabase
             .from("rooms")
             .select("id, display_name, creator, pin");
 
@@ -559,7 +563,7 @@ app.get("/api/rooms/ownedByUser", async (req: Request, res: Response): Promise<v
 
     try {
         // { changed code: select rooms by creator and compute has_password }
-        const { data, error } = await supabase
+        const {data, error} = await supabase
             .from("rooms")
             .select("id, display_name, creator, pin")
             .eq("creator", user.id);
@@ -599,7 +603,7 @@ app.get("/api/rooms/:roomId", async (req: Request, res: Response): Promise<void>
     }
     try {
         // { changed code }
-        const { data, error } = await supabase
+        const {data, error} = await supabase
             .from("rooms")
             .select("id, display_name, creator")
             .eq("id", roomId)
@@ -654,10 +658,10 @@ app.delete("/api/rooms/:roomId", async (req: Request, res: Response) => {
 
     try {
         // { changed code: check ownership then delete }
-        const { data: existsData, error: existsError } = await supabase
+        const {data: existsData, error: existsError} = await supabase
             .from("rooms")
             .select("id")
-            .match({ id: roomId, creator: user.id })
+            .match({id: roomId, creator: user.id})
             .limit(1);
 
         if (existsError) {
@@ -667,10 +671,10 @@ app.delete("/api/rooms/:roomId", async (req: Request, res: Response) => {
         }
 
         if (existsData && existsData.length > 0) {
-            const { data: delData, error: delError } = await supabase
+            const {data: delData, error: delError} = await supabase
                 .from("rooms")
                 .delete()
-                .match({ id: roomId, creator: user.id });
+                .match({id: roomId, creator: user.id});
 
             if (delError) {
                 console.error("Supabase delete error:", delError);
@@ -709,7 +713,7 @@ app.post("/api/passwordManagement/passwordReset", async (req: Request, res: Resp
     try {
         console.log(`Looking up user with email: ${userMail}`);
         // { changed code }
-        const { data, error } = await supabase
+        const {data, error} = await supabase
             .from("users")
             .select("email, id")
             .eq("email", userMail)
@@ -838,7 +842,7 @@ async function changePasswordOfUser(user: string, newPassword: string): Promise<
 
         const dbResponse = await supabase
             .from("users")
-            .update({ pin: hashedPassword })
+            .update({pin: hashedPassword})
             .eq("id", user)
             .select("*");
 
