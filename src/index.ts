@@ -40,11 +40,8 @@ const ROOM_SECRET_EXPIRY = "2h";
 // todo: this bad bad, add to db eventually
 const refreshTokens: Record<string, string> = {};
 
-const supabase = createClient(
-    SUPABASE_URL,
-    SUPABASE_KEY
-)
 
+const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!)
 const app = express();
 app.use(express.json());
 app.use(cors({
@@ -102,14 +99,6 @@ const verifyPassword = async (inputPassword: string, storedPassword: string): Pr
     }
 };
 
-/*
-
-
-            API Endpoints
-
-
- */
-
 
 app.options("*", (req, res) => {
     console.log(`Received OPTIONS request for ${req.path}`);
@@ -132,18 +121,19 @@ app.post("/api/users", async (req: Request, res: Response) => {
         return;
     }
 
-
     const hashedPassword = await bcrypt.hash(password, 10);
     const {error, data} = await supabase.from("users").insert([{id: user, email: email, pin: hashedPassword}]).select();
-    res.status(201).json({message: `User ${user} has been created.`});
+
     if (error) {
         console.error(error);
         res.status(500).json({error: "Database error occurred."});
+        return;
     }
-    if (!data || !data[0].id){
+    if (!data?.[0]?.id){
         res.status(500).json({error: "User creation failed."});
         return;
     }
+    res.status(201).json({message: `User ${user} has been created.`});
 });
 
 app.get("/api/users/:userId", async (req: Request, res: Response) => {
