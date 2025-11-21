@@ -105,8 +105,20 @@ app.options("*", (req, res) => {
     res.status(204).send();
 });
 
-app.get("/api/status", (req: Request, res: Response): void => {
+app.get("/api/status", async (req: Request, res: Response): Promise<void> => {
     res.json({status: "Server is running"});
+
+    const { data, error } = await supabase
+        .from("logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
+    if (error) {
+        res.json({status: "Server is running, but Database is not.", error: error.message});
+    } else {
+        // TODO: Remove this
+        res.json({status: "Server is running", data: data});
+    }
 });
 
 
