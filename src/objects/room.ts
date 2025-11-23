@@ -1,4 +1,4 @@
-export interface IRoom {
+export interface RoomProps {
     id: string;
     displayName: string;
     creator: string;
@@ -12,7 +12,7 @@ export class Room {
     creator: string;
     pin: string;
 
-    constructor(private readonly room: IRoom) {
+    constructor(private readonly room: RoomProps) {
         this.id = room.id;
         this.displayName = room.displayName;
         this.creator = room.creator;
@@ -27,5 +27,4 @@ export class Room {
             pin: this.pin,
         }
     }
-
 }
