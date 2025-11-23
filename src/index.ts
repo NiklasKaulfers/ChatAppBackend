@@ -9,6 +9,9 @@ import {createServer} from "node:http";
 import Mailjet from "node-mailjet";
 import {createClient} from "@supabase/supabase-js"
 
+import {generateAccessToken, generateRefreshToken} from "./helpers/jwt-helper";
+import {handleStatusRequest} from "./handlers/status";
+
 const MAILJET_API_KEY = process.env.MAILJET_API_KEY;
 const MAILJET_PRIVATE_KEY = process.env.MAILJET_PRIVATE_KEY;
 const CHAT_EMAIL = process.env.EMAIL;
@@ -36,8 +39,7 @@ if (!SUPABASE_KEY || !SUPABASE_URL) {
 
 
 const PORT = process.env.PORT || 3000;
-const ACCESS_TOKEN_EXPIRY = "2h";
-const REFRESH_TOKEN_EXPIRY = "7d";
+
 const ROOM_SECRET_EXPIRY = "2h";
 // todo: this bad bad, add to db eventually
 const refreshTokens: Record<string, string> = {};
@@ -70,37 +72,6 @@ httpServer.listen(PORT, () => {
 });
 
 
-const generateRandomId = (): string => uuidV4();
-
-const generateAccessToken = (userId: string): string => {
-    return jwt.sign({id: userId}, JWT_SECRET, {expiresIn: ACCESS_TOKEN_EXPIRY});
-};
-
-const generateRefreshToken = (userId: string): string => {
-    return jwt.sign({id: userId}, JWT_SECRET, {expiresIn: REFRESH_TOKEN_EXPIRY});
-};
-
-
-const verifyPassword = async (inputPassword: string, storedPassword: string): Promise<boolean> => {
-    // Trim the input password to remove any accidental whitespace
-    const cleanPassword = inputPassword.trim();
-
-    try {
-        // Try the async compare first
-        return await bcrypt.compare(cleanPassword, storedPassword);
-    } catch (err) {
-        console.error("Async bcrypt compare failed, trying sync compare:", err);
-
-        // Fall back to sync compare if the async one fails
-        try {
-            return bcrypt.compareSync(cleanPassword, storedPassword);
-        } catch (syncErr) {
-            console.error("Both async and sync bcrypt compare failed:", syncErr);
-            return false;
-        }
-    }
-};
-
 
 app.options("*", (req, res) => {
     console.log(`Received OPTIONS request for ${req.path}`);
@@ -108,17 +79,7 @@ app.options("*", (req, res) => {
 });
 
 app.get("/api/status", async (req: Request, res: Response): Promise<void> => {
-    const { data, error } = await supabase
-        .from("logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(100);
-    if (error) {
-        res.json({status: "Server is running, but Database is not.", error: error.message});
-    } else {
-        // TODO: Remove this
-        res.json({status: "Server is running", data: data});
-    }
+    res = await handleStatusRequest(req, res);
 });
 
 
@@ -362,7 +323,7 @@ app.post("/api/rooms/verifyUser", async (req: Request, res: Response): Promise<v
 
 app.post("/api/rooms", async (req: Request, res: Response): Promise<void> => {
     const {pin, display_name} = req.body;
-    const roomId = generateRandomId();
+    const roomId = uuidV4();
 
 
     try {
@@ -949,7 +910,7 @@ io.on("connection", (socket: Socket) => {
 
         try {
             io.to(roomId).emit("message", {
-                id: generateRandomId(),
+                id: uuidV4(),
                 user: userId,
                 message,
                 timestamp: new Date().toISOString()
