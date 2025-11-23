@@ -106,8 +106,6 @@ app.options("*", (req, res) => {
 });
 
 app.get("/api/status", async (req: Request, res: Response): Promise<void> => {
-    res.json({status: "Server is running"});
-
     const { data, error } = await supabase
         .from("logs")
         .select("*")
