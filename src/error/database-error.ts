@@ -1,4 +1,4 @@
-import {BackendError} from "./BackendError";
+import {BackendError} from "./backend-error";
 
 export class DatabaseError extends BackendError {
     constructor(public message: string, errorCode: number) {
