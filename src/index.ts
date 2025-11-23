@@ -27,6 +27,8 @@ if (!JWT_SECRET
     throw new Error("Secrets are missing.");
 }
 
+const SUPABASE_USERS_UNIQUENESS_ERROR = "duplicate key value violates unique constraint \"users_email_key\""
+
 if (!SUPABASE_KEY || !SUPABASE_URL) {
     console.error("Supabase info missing.")
     throw new Error("Supabase info missing.");
@@ -225,9 +227,14 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
             .limit(1);
 
         if (error) {
-            console.error("Supabase error:", error);
-            res.status(500).json({error: "Database error occurred."});
-            return;
+            if (error.message === SUPABASE_USERS_UNIQUENESS_ERROR){
+                res.status(404).json({error: "Email is already registered."});
+                return ;
+            } else {
+                console.error("Supabase error:", error);
+                res.status(500).json({error: "Database error occurred."});
+                return;
+            }
         }
 
         if (!data || data.length === 0) {
