@@ -4,6 +4,11 @@ interface UserProps {
     username: string;
 }
 
+export interface UserId {
+    id: string;
+}
+
+
 export class User {
     email: string;
     password: string;

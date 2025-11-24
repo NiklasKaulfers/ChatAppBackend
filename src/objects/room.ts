@@ -3,7 +3,6 @@ export interface RoomProps {
     displayName: string;
     creator: string;
     pin: string;
-
 }
 
 export class Room {

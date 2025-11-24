@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import {JwtError} from "../error/jwt-error";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
@@ -13,3 +14,11 @@ export const generateAccessToken = (userId: string): string => {
 export const generateRefreshToken = (userId: string): string => {
     return jwt.sign({id: userId}, JWT_SECRET, {expiresIn: REFRESH_TOKEN_EXPIRY});
 };
+
+export function verifyJWT<T>(auth: string): T{
+    try{
+        return jwt.verify(auth, JWT_SECRET) as T;
+    } catch(error: any){
+        throw new JwtError(error.message, 403)
+    }
+}

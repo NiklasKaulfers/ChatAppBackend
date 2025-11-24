@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import cors from "cors";
 import jwt from "jsonwebtoken";
 import {v4 as uuidV4} from "uuid";
-import {checkValidCharsForDB} from "./check-valid-chars-for-db";
+import {checkValidCharsForDB} from "./helpers/check-valid-chars-for-db";
 import {Server, Socket} from "socket.io";
 import {createServer} from "node:http";
 import Mailjet from "node-mailjet";

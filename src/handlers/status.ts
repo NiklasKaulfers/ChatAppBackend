@@ -1,6 +1,7 @@
 import {Request, Response} from "express";
 import {DatabaseHandler} from "../database-calls/database-handler";
 import {DatabaseError} from "../error/database-error";
+import {DefaultServerError} from "../error/default-server-error";
 
 export async function handleStatusRequest(req: Request, res: Response): Promise<Response> {
 
@@ -10,9 +11,9 @@ export async function handleStatusRequest(req: Request, res: Response): Promise<
         return res.status(200).json(data);
     } catch (error: any) {
         if (error instanceof DatabaseError) {
-            return error.toResponse(res)
+            return error.toResponse(res);
         } else {
-            return res.status(500).json({error: error.message});
+            return DefaultServerError.toResponse(res);
         }
     }
 }
