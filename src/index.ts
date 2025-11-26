@@ -64,7 +64,7 @@ const io = new Server(httpServer, {
     }
 });
 
-app.options("*", cors());
+app.options("/*", cors());
 
 
 httpServer.listen(PORT, () => {
@@ -73,7 +73,7 @@ httpServer.listen(PORT, () => {
 
 
 
-app.options("*", (req, res) => {
+app.options("/*", (req, res) => {
     console.log(`Received OPTIONS request for ${req.path}`);
     res.status(204).send();
 });
