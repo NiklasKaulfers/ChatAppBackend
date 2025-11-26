@@ -73,9 +73,13 @@ httpServer.listen(PORT, () => {
 
 
 
-app.use((req, res) => {
-    console.log(`Received OPTIONS request for ${req.path}`);
-    res.status(204).send();
+app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method === "OPTIONS") {
+        console.log(`Received OPTIONS request for ${req.path}`);
+        res.status(204).send();
+    } else {
+        next();
+    }
 });
 
 app.get("/api/status", async (req: Request, res: Response): Promise<void> => {
