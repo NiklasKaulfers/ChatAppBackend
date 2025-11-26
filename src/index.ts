@@ -73,7 +73,7 @@ httpServer.listen(PORT, () => {
 
 
 
-app.options("/*", (req, res) => {
+app.use((req, res) => {
     console.log(`Received OPTIONS request for ${req.path}`);
     res.status(204).send();
 });
